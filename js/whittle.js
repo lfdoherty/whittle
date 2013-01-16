@@ -100,6 +100,7 @@ function render(w, r){
 				html += (r.max?' max="'+esc(r.max)+'"':'')
 				html += (r.step?' step="'+esc(r.step)+'"':'')
 				html += (r.checked?' checked':'')
+				html += (r.name?' name="'+esc(r.name)+'"':'')
 			}
 			html += '>'
 			html += renderChildren(w,r)
@@ -137,6 +138,10 @@ Whittle.prototype.refresher = function(obj, start, stop){
 	if(arguments.length !== 3){
 		throw new Error('refresher arguments wrong, should be: (obj, startName, stopName)')
 	}
+	if(obj == undefined){
+		throw new Error('null obj parameter for refresher')
+	}
+	
 	this.generator.refreshers.push({obj: obj, start: start, stop: stop})
 }
 
@@ -274,6 +279,25 @@ function renderAttrs(a, b){
 		if(a.checked !== b.checked) dom.checked = b.checked
 		b.uid = a.uid
 		return true
+	}else if(a.type === 'a'){
+		var dom = document.getElementById(a.uid)
+		if(!dom){
+			console.log('dom not found: ' + a.uid)
+			return
+		}
+		
+		adjustClasses(a, b, dom)
+		
+		var oldStyleStr = stringifyStyle(a)
+		var newStyleStr = stringifyStyle(b)
+		if(oldStyleStr !== newStyleStr) dom.style = newStyleStr
+		
+		if(a.target !== b.target && b.target) dom.target = b.target
+		if(a.href !== b.href && b.href) dom.href = b.href
+		if(a.draggable !== b.draggable && b.draggable) dom.draggable = b.draggable
+		
+		b.uid = a.uid
+		return true
 	}else{
 		var n = {}
 		Object.keys(a).forEach(function(aa){
@@ -291,20 +315,28 @@ function renderPartialChildren(ach, bch){
 		var d = different(ac, bc)
 		if(!d){
 			bch[i] = ac
-			console.log('no change')
+			//console.log('no change')
 		}else if(d === 'children'){
 			if(ac.children.length !== bc.children.length) return
 			var did = renderPartialChildren(ac.children, bc.children)
-			console.log('sub children done: ' + did)			
-			if(!did) {console.log('children');return;}
+			//console.log('sub children done: ' + did)			
+			if(!did) {
+				//console.log('children');
+				return;
+			}
+			bc.uid = ac.uid
 		}else if(d === 'attrs'){
 			var did = renderAttrs(ac, bc)
-			if(!did) {console.log('attrs');return;}
+			
+			if(!did) {
+				console.log('attrs');
+				return;
+			}
 		}else{
 			return
 		}
 	}
-	console.log('children render finished: ' + ach.length)
+	//console.log('children render finished: ' + ach.length)
 	return true
 }
 
@@ -433,6 +465,11 @@ Whittle.prototype.type = function(v){
 	this.cur.typeAttribute = v
 	return this
 }
+Whittle.prototype.name = function(v){
+	if(this.cur.type !== 'input') throw new Error('only INPUT tags can have a name attribute')
+	this.cur.name = v
+	return this
+}
 
 Whittle.prototype.min = function(v){
 	if(this.cur.type !== 'input') throw new Error('only INPUT tags can have a min attribute')
@@ -506,6 +543,11 @@ Whittle.prototype.after = function(cb){
 }
 Whittle.prototype.also = function(f){
 	f(this)
+	return this
+}
+
+Whittle.prototype.listen = function(eventName, cb){
+	this.cur.listeners.push({type: eventName, f: cb})
 	return this
 }
 
