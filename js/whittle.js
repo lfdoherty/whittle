@@ -61,6 +61,7 @@ function render(w, r){
 		case 'br':
 			html += '<br/>'
 		break;
+		case 'hr':
 		case 'span':
 		case 'div':
 		case 'i':
@@ -393,6 +394,9 @@ Whittle.prototype.li = function(){
 }
 Whittle.prototype.a = function(){
 	return makeNode('a', this)
+}
+Whittle.prototype.hr = function(){
+	return makeNode('hr', this)
 }
 
 Whittle.prototype.input = function(){
