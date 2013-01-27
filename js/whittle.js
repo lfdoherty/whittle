@@ -74,6 +74,7 @@ function render(w, r){
 		case 'td':
 			html += '<'+r.type+renderClasses(r)
 					+idifyIfNeeded(w, r)
+					+(r.title?' title="'+r.title+'"':'')
 					+(r.draggable?' draggable="true"':'')+renderStyle(w,r)+'>'
 			html += renderChildren(w,r)
 			html += '</'+r.type+'>'
@@ -187,6 +188,28 @@ function attachAll(local, g){
 	})
 	g.children.forEach(attachAll.bind(undefined, local))
 }
+/*function isInDom(d){
+	while(d && d.parentNode){
+		d = d.parentNode
+		if(d === document) return true
+	}
+	return false
+}*/
+function detachListeners(local, g){
+	if(g.listeners){
+		g.listeners.forEach(function(r){
+			if(r.func === undefined) return
+			//console.log('removed: ' + r.uid)
+			var dom = document.getElementById(g.uid)
+			dom.removeEventListener(r.type, r.func)
+			r.func = undefined
+		})
+	}
+	g.children.forEach(function(c){
+		detachListeners(local, c)
+	})
+}
+
 function attachListeners(local, g, useListened){
 	if(g.listeners && (!useListened || !g.listened)){
 		g.listened = true
@@ -194,10 +217,41 @@ function attachListeners(local, g, useListened){
 			var dom = document.getElementById(g.uid)
 			if(dom == undefined){
 				throw new Error('cannot find dom node: ' + g.uid)
+
 			}
-			dom.addEventListener(r.type, function(e){
+			
+
+			var guid = Math.random()
+			/*if(r.type === 'createNew'){
+				if(dom.strange){
+					throw new Error('TODO')
+				}
+				dom.strange = guid
+			}
+			
+			if(!r.uid) r.uid = Math.random()
+			
+			if(dom[r.uid]){
+				dom.removeEventListener(r.type, dom[r.uid])
+			}*/
+			
+			if(r.func){
+				throw new Error('adding already-added listener: ' + r.uid + ' ' + g.uid)
+				//dom.removeEventListener(r.type, r.func)
+				//console.log('removing: ' + r.type + ' ' + g.uid + ' ' + guid)
+			}
+			
+			//console.log('adding ' + r.type + ' ' + g.uid + ' ' + guid + ' ' + r.uid)
+			r.func = function(e){
+				/*if(!isInDom(dom)){
+					throw new Error('ignoring event for object no longer in DOM: ' + e.id)
+				}*/
+				//console.log('calling ' + g.uid + ' ' + guid + ' ' + r.uid)
 				r.f.call(dom, e)
-			})
+			}
+			dom[r.uid] = r.func
+			//console.log('adding ' + r.type + ' ' + g.uid)
+			dom.addEventListener(r.type, r.func)
 		})
 	}
 	g.children.forEach(function(c){
@@ -218,31 +272,34 @@ function afterAll(local, g){
 Whittle.prototype._refresh = function(){
 
 	var g = this.rootGenerator
-	
+
+	detachListeners(this, g)//
+	detachAll(this, g)
+
+	g.refreshers = []
 	var oldChildren = g.children
 	g.children = []
-
-	detachAll(this, g)
-	g.refreshers = []
 	
 	g.f(this)//generates the 'whittle object model' (WOM)
 	
 	var did
 	if(g.children.length === oldChildren.length){
-		console.log('trying partial render')
+		//console.log('trying partial render')
 		did = renderPartialChildren(oldChildren, g.children)
 	}
 	if(!did){
-		console.log('full re-render')
+		//console.log('full re-render')
 		var html = render(this, g)
 		g.container.innerHTML = html//TODO compare old and new WOM and update as little as possible
 	}
 	
 	attachAll(this, g)//activate refreshers
 	
-	attachListeners(this, g, did)//attach event listeners to DOM objects (or delegate?)
+	attachListeners(this, g, false)//did)//attach event listeners to DOM objects (or delegate?)
 	
 	afterAll(this, g)//activate special 'after' event listeners
+	
+	//console.log('done render')
 }
 
 function adjustClasses(a, b, dom){
@@ -305,7 +362,7 @@ function renderAttrs(a, b){
 			if(aa === 'parent' || aa === 'children') return
 			n[aa] = a[aa]
 		})
-		console.log('failed attr render: ' + a.type + ' ' + JSON.stringify(n))
+		//console.log('failed attr render: ' + a.type + ' ' + JSON.stringify(n))
 	}
 }
 function renderPartialChildren(ach, bch){
@@ -379,6 +436,9 @@ Whittle.prototype.span = function(){
 }
 Whittle.prototype.i = function(){
 	return makeNode('i', this)
+}
+Whittle.prototype.b = function(){
+	return makeNode('b', this)
 }
 Whittle.prototype.div = function(){
 	return makeNode('div', this)
@@ -502,7 +562,24 @@ Whittle.prototype.e = function(){
 }
 
 Whittle.prototype.click = function(cb){
+	if(!this.cur.listeners){
+		throw new Error('cannot listen to whittle root')
+	}
+	
 	this.cur.listeners.push({type: 'click', f: cb})
+	return this
+}
+Whittle.prototype.contextmenu = function(cb){
+	this.cur.listeners.push({type: 'contextmenu', f: cb})
+	return this
+}
+
+Whittle.prototype.mousedown = function(cb){
+	this.cur.listeners.push({type: 'mousedown', f: cb})
+	return this
+}
+Whittle.prototype.mouseup = function(cb){
+	this.cur.listeners.push({type: 'mouseup', f: cb})
 	return this
 }
 Whittle.prototype.change = function(cb){
@@ -551,6 +628,9 @@ Whittle.prototype.also = function(f){
 }
 
 Whittle.prototype.listen = function(eventName, cb){
+	if(!this.cur.listeners){
+		throw new Error('cannot listen to whittle root')
+	}
 	this.cur.listeners.push({type: eventName, f: cb})
 	return this
 }
