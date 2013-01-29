@@ -95,13 +95,13 @@ function render(w, r){
 		case 'option':
 		case 'textarea':
 			html += '<'+r.type+renderClasses(r)+idifyIfNeeded(w, r)
-					+(r.value?' value="'+esc(r.value)+'"':'')
+					+(r.value!==undefined?' value="'+esc(r.value)+'"':'')
 					+(r.placeholder?' placeholder="'+esc(r.placeholder)+'"':'')
 					+renderStyle(w,r)
 			if(r.type === 'input'){
 				html += (r.typeAttribute?' type="'+esc(r.typeAttribute)+'"':'')
-				html += (r.min?' min="'+esc(r.min)+'"':'')
-				html += (r.max?' max="'+esc(r.max)+'"':'')
+				html += (r.min!==undefined?' min="'+esc(r.min)+'"':'')
+				html += (r.max!==undefined?' max="'+esc(r.max)+'"':'')
 				html += (r.step?' step="'+esc(r.step)+'"':'')
 				html += (r.checked?' checked':'')
 				html += (r.name?' name="'+esc(r.name)+'"':'')
