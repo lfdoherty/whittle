@@ -71,6 +71,7 @@ function render(w, r){
 		case 'li':
 		case 'table':
 		case 'tr':
+		case 'select':
 		case 'td':
 			html += '<'+r.type+renderClasses(r)
 					+idifyIfNeeded(w, r)
@@ -91,6 +92,7 @@ function render(w, r){
 			html += '</a>'
 		break;
 		case 'input':
+		case 'option':
 		case 'textarea':
 			html += '<'+r.type+renderClasses(r)+idifyIfNeeded(w, r)
 					+(r.value?' value="'+esc(r.value)+'"':'')
@@ -103,6 +105,8 @@ function render(w, r){
 				html += (r.step?' step="'+esc(r.step)+'"':'')
 				html += (r.checked?' checked':'')
 				html += (r.name?' name="'+esc(r.name)+'"':'')
+			}else if(r.type === 'option'){
+				html += (r.selected?' selected':'')
 			}
 			html += '>'
 			html += renderChildren(w,r)
@@ -474,6 +478,13 @@ Whittle.prototype.tr = function(){
 Whittle.prototype.td = function(){
 	return makeNode('td', this)
 }
+Whittle.prototype.select = function(){
+	return makeNode('select', this)
+}
+Whittle.prototype.option = function(){
+	if(this.cur.type !== 'select') _.errout('option tag must be child of select tag')
+	return makeNode('option', this)
+}
 Whittle.prototype.br = function(){
 	makeNode('br', this)
 	this.e()
@@ -553,6 +564,12 @@ Whittle.prototype.step = function(v){
 Whittle.prototype.checked = function(v){
 	if(this.cur.type !== 'input') throw new Error('only INPUT tags can have a checked attribute')
 	this.cur.checked = v
+	return this
+}
+
+Whittle.prototype.selected = function(v){
+	if(this.cur.type !== 'option') throw new Error('only OPTION tags can have a selected attribute')
+	this.cur.selected = v
 	return this
 }
 
