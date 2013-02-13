@@ -1,4 +1,6 @@
 
+exports.module = module
+
 function renderChildren(w, r){
 	var html = ''
 	r.children.forEach(function(c){
@@ -61,6 +63,15 @@ function render(w, r){
 		case 'br':
 			html += '<br/>'
 		break;
+		case 'iframe':
+			html += '<'+r.type+renderClasses(r)
+					+idifyIfNeeded(w, r)
+					+(r.title?' title="'+r.title+'"':'')
+					+(r.name?' name="'+r.name+'"':'')
+					+(r.draggable?' draggable="true"':'')+renderStyle(w,r)+'>'
+			html += renderChildren(w,r)
+			html += '</'+r.type+'>'
+		break;
 		case 'hr':
 		case 'span':
 		case 'div':
@@ -86,10 +97,22 @@ function render(w, r){
 					+(r.draggable?' draggable="true"':'')
 					+(r.href?' href="'+esc(r.href)+'"':'')
 					+(r.target?' target="'+esc(r.target)+'"':'')
+					+(r.title?' title="'+r.title+'"':'')
 					+renderStyle(w,r)
 					+'>'
 			html += renderChildren(w,r)
 			html += '</a>'
+		break;
+		case 'form':
+			html += '<'+r.type+renderClasses(r)+idifyIfNeeded(w, r)
+					+renderStyle(w,r)
+					html += (r.action!==undefined?' action="'+esc(r.action)+'"':'')
+					html += (r.method!==undefined?' method="'+esc(r.method)+'"':'')
+					html += (r.enctype!==undefined?' enctype="'+esc(r.enctype)+'"':'')
+					html += (r.target!==undefined?' target="'+esc(r.target)+'"':'')
+			html += '>'
+			html += renderChildren(w,r)
+			html += '</'+r.type+'>'
 		break;
 		case 'input':
 		case 'option':
@@ -104,6 +127,7 @@ function render(w, r){
 				html += (r.max!==undefined?' max="'+esc(r.max)+'"':'')
 				html += (r.step?' step="'+esc(r.step)+'"':'')
 				html += (r.checked?' checked':'')
+				html += (r.spellcheck!==undefined?' spellcheck="'+(!!r.spellcheck)+'"':'')
 				html += (r.name?' name="'+esc(r.name)+'"':'')
 			}else if(r.type === 'option'){
 				html += (r.selected?' selected':'')
@@ -119,6 +143,7 @@ function render(w, r){
 }
 
 
+var globalIds = 1
 
 function Whittle(container, generatorFunc){
 	//this.container = container
@@ -128,6 +153,7 @@ function Whittle(container, generatorFunc){
 	this.cur = this.generator
 	//this.cur = this.root = {type: 'root', children: []}
 	this.nextUid = 1000
+	this.selfId = ++globalIds
 
 	var local = this	
 	this.refreshFunc = function(){
@@ -137,7 +163,7 @@ function Whittle(container, generatorFunc){
 
 Whittle.prototype._makeUid = function(){
 	//console.log('making uid: ' + (1+this.nextUid))
-	return ++this.nextUid
+	return ++this.nextUid+':'+this.selfId
 }
 
 Whittle.prototype.refresher = function(obj, start, stop){
@@ -202,12 +228,21 @@ function attachAll(local, g){
 function detachListeners(local, g){
 	if(g.listeners){
 		g.listeners.forEach(function(r){
-			if(r.func === undefined) return
-			//console.log('removed: ' + r.uid)
+			if(r.func === undefined){
+				throw new Error('weird')
+				return
+			}
+			//if(r.func.uid) console.log('removed(' + r.type + '): ' + r.func.uid)
 			var dom = document.getElementById(g.uid)
+			/*if(dom !== r.dom){
+				throw new Error('doms do not match')
+			}
+			r.removed = true*/
 			dom.removeEventListener(r.type, r.func)
+			//dom[r.uid] = undefined
 			r.func = undefined
 		})
+		g.listeners = []
 	}
 	g.children.forEach(function(c){
 		detachListeners(local, c)
@@ -215,7 +250,7 @@ function detachListeners(local, g){
 }
 
 function attachListeners(local, g, useListened){
-	if(g.listeners && (!useListened || !g.listened)){
+	if(g.listeners/* && (!useListened || !g.listened)*/){
 		g.listened = true
 		g.listeners.forEach(function(r){
 			var dom = document.getElementById(g.uid)
@@ -224,6 +259,11 @@ function attachListeners(local, g, useListened){
 
 			}
 			
+			if(r.removed){
+				throw new Error('already removed')
+			}
+			
+			if(!r.uid) r.uid = Math.random()
 
 			var guid = Math.random()
 			/*if(r.type === 'createNew'){
@@ -233,7 +273,7 @@ function attachListeners(local, g, useListened){
 				dom.strange = guid
 			}
 			
-			if(!r.uid) r.uid = Math.random()
+			
 			
 			if(dom[r.uid]){
 				dom.removeEventListener(r.type, dom[r.uid])
@@ -253,7 +293,13 @@ function attachListeners(local, g, useListened){
 				//console.log('calling ' + g.uid + ' ' + guid + ' ' + r.uid)
 				r.f.call(dom, e)
 			}
-			dom[r.uid] = r.func
+			//r.func.uid = r.f.uid
+			//r.dom = dom
+			
+			//if(dom[r.uid]){
+			//	throw new Error('already has: ' + r.type + ' ' + g.uid)
+			//}
+			//dom[r.uid] = r.func
 			//console.log('adding ' + r.type + ' ' + g.uid)
 			dom.addEventListener(r.type, r.func)
 		})
@@ -275,6 +321,9 @@ function afterAll(local, g){
 }
 Whittle.prototype._refresh = function(){
 
+	if(this._isRefreshing) throw new Error('recursive refresh problem')
+	this._isRefreshing = true
+		
 	var g = this.rootGenerator
 
 	detachListeners(this, g)//
@@ -303,6 +352,7 @@ Whittle.prototype._refresh = function(){
 	
 	afterAll(this, g)//activate special 'after' event listeners
 	
+	this._isRefreshing = false
 	//console.log('done render')
 }
 
@@ -369,6 +419,15 @@ function renderAttrs(a, b){
 		//console.log('failed attr render: ' + a.type + ' ' + JSON.stringify(n))
 	}
 }
+
+function copyOverListeners(b, a){
+	if(b.listeners) a.listeners = [].concat(b.listeners)
+	b.children.forEach(function(bc, index){
+		var ac = a.children[index]
+		copyOverListeners(bc, ac)
+	})
+}
+
 function renderPartialChildren(ach, bch){
 	if(ach.length !== bch.length) throw new Error('TODO?')
 	for(var i=0;i<ach.length;++i){
@@ -376,6 +435,7 @@ function renderPartialChildren(ach, bch){
 		var bc = bch[i]
 		var d = different(ac, bc)
 		if(!d){
+			copyOverListeners(bc, ac)
 			bch[i] = ac
 			//console.log('no change')
 		}else if(d === 'children'){
@@ -391,7 +451,7 @@ function renderPartialChildren(ach, bch){
 			var did = renderAttrs(ac, bc)
 			
 			if(!did) {
-				console.log('attrs');
+				//console.log('attrs');
 				return;
 			}
 		}else{
@@ -478,6 +538,14 @@ Whittle.prototype.tr = function(){
 Whittle.prototype.td = function(){
 	return makeNode('td', this)
 }
+
+Whittle.prototype.form = function(){
+	return makeNode('form', this)
+}
+Whittle.prototype.iframe = function(){
+	return makeNode('iframe', this)
+}
+
 Whittle.prototype.select = function(){
 	return makeNode('select', this)
 }
@@ -498,6 +566,7 @@ Whittle.prototype.value = function(v){
 	this.cur.value = v
 	return this
 }
+
 Whittle.prototype.clazz = function(v){
 	//TODO validate
 	this.cur.classes.push(v)
@@ -530,8 +599,24 @@ Whittle.prototype.href = function(v){
 	return this
 }
 Whittle.prototype.target = function(v){
-	if(this.cur.type !== 'a') throw new Error('only A tags can have a target attribute')
+	if(this.cur.type !== 'a' && this.cur.type !== 'form') throw new Error('only A and FORM tags can have a target attribute')
 	this.cur.target = v
+	return this
+}
+
+Whittle.prototype.action = function(v){
+	if(this.cur.type !== 'form') throw new Error('only FORM tags can have a action attribute')
+	this.cur.action = v
+	return this
+}
+Whittle.prototype.method = function(v){
+	if(this.cur.type !== 'form') throw new Error('only FORM tags can have a method attribute')
+	this.cur.method = v
+	return this
+}
+Whittle.prototype.enctype = function(v){
+	if(this.cur.type !== 'form') throw new Error('only FORM tags can have a enctype attribute')
+	this.cur.enctype = v
 	return this
 }
 
@@ -541,7 +626,7 @@ Whittle.prototype.type = function(v){
 	return this
 }
 Whittle.prototype.name = function(v){
-	if(this.cur.type !== 'input') throw new Error('only INPUT tags can have a name attribute')
+	if(this.cur.type !== 'input' && this.cur.type !== 'iframe') throw new Error('only INPUT or IFRAME tags can have a name attribute')
 	this.cur.name = v
 	return this
 }
@@ -564,6 +649,12 @@ Whittle.prototype.step = function(v){
 Whittle.prototype.checked = function(v){
 	if(this.cur.type !== 'input') throw new Error('only INPUT tags can have a checked attribute')
 	this.cur.checked = v
+	return this
+}
+
+Whittle.prototype.spellcheck = function(v){
+	//if(this.cur.type !== 'input') throw new Error('only INPUT tags can have a checked attribute')
+	this.cur.spellcheck = v
 	return this
 }
 
