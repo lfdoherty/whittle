@@ -75,6 +75,11 @@ function render(w, r){
 		case 'hr':
 		case 'span':
 		case 'div':
+		case 'h1':
+		case 'h2':
+		case 'h3':
+		case 'h4':
+		case 'h5':
 		case 'i':
 		case 'b':
 		case 'ol':
@@ -495,6 +500,23 @@ function makeNode(type,local){
 	return local
 }
 
+Whittle.prototype.h1 = function(){
+	return makeNode('h1', this)
+}
+Whittle.prototype.h2 = function(){
+	return makeNode('h2', this)
+}
+Whittle.prototype.h3 = function(){
+	return makeNode('h3', this)
+}
+Whittle.prototype.h4 = function(){
+	return makeNode('h4', this)
+}
+Whittle.prototype.h5 = function(){
+	return makeNode('h5', this)
+}
+
+
 Whittle.prototype.span = function(){
 	return makeNode('span', this)
 }
@@ -594,34 +616,46 @@ Whittle.prototype.draggable = function(v){
 	return this
 }
 Whittle.prototype.href = function(v){
-	if(this.cur.type !== 'a') throw new Error('only A tags can have a href attribute')
+	if(this.cur.type !== 'a'){
+		throw new Error('only A tags can have a href attribute')
+	}
 	this.cur.href = v
 	return this
 }
 Whittle.prototype.target = function(v){
-	if(this.cur.type !== 'a' && this.cur.type !== 'form') throw new Error('only A and FORM tags can have a target attribute')
+	if(this.cur.type !== 'a' && this.cur.type !== 'form'){
+		 throw new Error('only A and FORM tags can have a target attribute')
+	}
 	this.cur.target = v
 	return this
 }
 
 Whittle.prototype.action = function(v){
-	if(this.cur.type !== 'form') throw new Error('only FORM tags can have a action attribute')
+	if(this.cur.type !== 'form'){
+		throw new Error('only FORM tags can have a action attribute')
+	}
 	this.cur.action = v
 	return this
 }
 Whittle.prototype.method = function(v){
-	if(this.cur.type !== 'form') throw new Error('only FORM tags can have a method attribute')
+	if(this.cur.type !== 'form'){
+		throw new Error('only FORM tags can have a method attribute')
+	}
 	this.cur.method = v
 	return this
 }
 Whittle.prototype.enctype = function(v){
-	if(this.cur.type !== 'form') throw new Error('only FORM tags can have a enctype attribute')
+	if(this.cur.type !== 'form'){
+		throw new Error('only FORM tags can have a enctype attribute')
+	}
 	this.cur.enctype = v
 	return this
 }
 
 Whittle.prototype.type = function(v){
-	if(this.cur.type !== 'input') throw new Error('only INPUT tags can have a type attribute')
+	if(this.cur.type !== 'input'){
+		throw new Error('only INPUT tags can have a type attribute')
+	}
 	this.cur.typeAttribute = v
 	return this
 }
@@ -632,22 +666,30 @@ Whittle.prototype.name = function(v){
 }
 
 Whittle.prototype.min = function(v){
-	if(this.cur.type !== 'input') throw new Error('only INPUT tags can have a min attribute')
+	if(this.cur.type !== 'input'){
+		throw new Error('only INPUT tags can have a min attribute')
+	}
 	this.cur.min = v
 	return this
 }
 Whittle.prototype.max = function(v){
-	if(this.cur.type !== 'input') throw new Error('only INPUT tags can have a max attribute')
+	if(this.cur.type !== 'input'){
+		throw new Error('only INPUT tags can have a max attribute')
+	}
 	this.cur.max = v
 	return this
 }
 Whittle.prototype.step = function(v){
-	if(this.cur.type !== 'input') throw new Error('only INPUT tags can have a step attribute')
+	if(this.cur.type !== 'input'){
+		throw new Error('only INPUT tags can have a step attribute')
+	}
 	this.cur.step = v
 	return this
 }
 Whittle.prototype.checked = function(v){
-	if(this.cur.type !== 'input') throw new Error('only INPUT tags can have a checked attribute')
+	if(this.cur.type !== 'input'){
+		throw new Error('only INPUT tags can have a checked attribute')
+	}
 	this.cur.checked = v
 	return this
 }
@@ -659,12 +701,17 @@ Whittle.prototype.spellcheck = function(v){
 }
 
 Whittle.prototype.selected = function(v){
-	if(this.cur.type !== 'option') throw new Error('only OPTION tags can have a selected attribute')
+	if(this.cur.type !== 'option'){
+		throw new Error('only OPTION tags can have a selected attribute')
+	}
 	this.cur.selected = v
 	return this
 }
 
 Whittle.prototype.e = function(){
+	if(!this.cur.parent){
+		throw new Error('unbalanced tags - nothing left to close')
+	}
 	this.cur = this.cur.parent
 	return this
 }
