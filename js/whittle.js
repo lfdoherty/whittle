@@ -92,6 +92,7 @@ function render(w, r){
 			html += '<'+r.type+renderClasses(r)
 					+idifyIfNeeded(w, r)
 					+(r.title?' title="'+r.title+'"':'')
+					+(r.contenteditable?' contenteditable="true"':'')
 					+(r.draggable?' draggable="true"':'')+renderStyle(w,r)+'>'
 			html += renderChildren(w,r)
 			html += '</'+r.type+'>'
@@ -296,7 +297,12 @@ function attachListeners(local, g, useListened){
 					throw new Error('ignoring event for object no longer in DOM: ' + e.id)
 				}*/
 				//console.log('calling ' + g.uid + ' ' + guid + ' ' + r.uid)
-				r.f.call(dom, e)
+				/*var oldStop = e.stopPropagation
+				var did = false
+				e.stopPropagation = function(){
+					did = true
+				}*/
+				return r.f.call(dom, e)
 			}
 			//r.func.uid = r.f.uid
 			//r.dom = dom
@@ -324,7 +330,7 @@ function afterAll(local, g){
 	}
 	g.children.forEach(afterAll.bind(undefined, local))
 }
-Whittle.prototype._refresh = function(){
+Whittle.prototype._refresh = function(forceRefresh){
 
 	if(this._isRefreshing) throw new Error('recursive refresh problem')
 	this._isRefreshing = true
@@ -341,7 +347,7 @@ Whittle.prototype._refresh = function(){
 	g.f(this)//generates the 'whittle object model' (WOM)
 	
 	var did
-	if(g.children.length === oldChildren.length){
+	if(g.children.length === oldChildren.length && !forceRefresh){
 		//console.log('trying partial render')
 		did = renderPartialChildren(oldChildren, g.children)
 	}
@@ -609,6 +615,10 @@ Whittle.prototype.style = function(v){
 }
 Whittle.prototype.placeholder = function(v){
 	this.cur.placeholder = v
+	return this
+}
+Whittle.prototype.contenteditable = function(v){
+	this.cur.contenteditable = v
 	return this
 }
 Whittle.prototype.draggable = function(v){
