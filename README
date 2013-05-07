@@ -1,1 +1,16 @@
 HTML-builder library designed to make it easy to refresh and attach listeners to the resulting DOM.
+
+To write directly to a DOM node (with incremental update when possible):
+
+var refresh = whittle.attach(document.body, function(w){
+	w.span().text('Hello World').e()
+})
+
+To write to a string:
+
+var refresh = whittle.makeHtmlString(function(w){
+	w.span().text('Hello World').e()
+})
+
+var htmlStr = refresh()
+document.body.innerHTML = htmlStr //or whatever you want to do with it

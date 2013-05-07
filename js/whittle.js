@@ -337,6 +337,16 @@ Whittle.prototype._refresh = function(forceRefresh){
 		
 	var g = this.rootGenerator
 
+	if(!g.container){//just writing to string
+		g.refreshers = []
+		g.children = []
+	
+		g.f(this)//generates the 'whittle object model' (WOM)
+
+		this._isRefreshing = false
+		return render(this, g)
+	}
+
 	detachListeners(this, g)//
 	detachAll(this, g)
 
@@ -379,6 +389,18 @@ function adjustClasses(a, b, dom){
 		}
 	})
 }
+
+function caretPositionIn(div){
+	var sel = window.getSelection();
+	var range  = sel.getRangeAt(0);
+	if(range.startContainer !== div && (
+			range.startContainer.parentNode !== div || 
+			range.startContainer.parentNode.childNodes[0] !== range.startContainer)){
+		return
+	}
+	return range.startOffset
+}
+
 function renderAttrs(a, b){
 	if(a.type === 'input'){
 		var dom = document.getElementById(a.uid)
@@ -400,6 +422,7 @@ function renderAttrs(a, b){
 		if(a.max !== b.max) dom.max = b.max
 		if(a.step !== b.step) dom.step = b.step
 		if(a.checked !== b.checked) dom.checked = b.checked
+		//console.log('rendering input')
 		b.uid = a.uid
 		return true
 	}else if(a.type === 'a'){
@@ -421,13 +444,87 @@ function renderAttrs(a, b){
 		
 		b.uid = a.uid
 		return true
+	}else if(a.type === 'span'){
+		var dom = document.getElementById(a.uid)
+		if(!dom){
+
+			var n = {}
+			var nb = {}
+			Object.keys(a).forEach(function(aa){
+				if(aa === 'parent' || aa === 'children'){
+					return
+				}
+				n[aa] = a[aa]
+			})
+			Object.keys(a).forEach(function(aa){
+				if(aa === 'parent' || aa === 'children'){
+					return
+				}
+				nb[aa] = b[aa]
+			})
+			console.log('failed attr render: ' + a.type + ' ' + JSON.stringify(n) + ' -> ' + JSON.stringify(nb))
+
+			console.log('dom not found: ' + a.uid)
+			return
+		}
+		
+		adjustClasses(a, b, dom)
+		
+		var oldStyleStr = stringifyStyle(a)
+		var newStyleStr = stringifyStyle(b)
+		if(oldStyleStr !== newStyleStr) dom.style = newStyleStr
+		
+		//if(a.target !== b.target && b.target) dom.target = b.target
+		//if(a.href !== b.href && b.href) dom.href = b.href
+		if(a.draggable !== b.draggable && b.draggable) dom.draggable = b.draggable
+		
+		b.uid = a.uid
+		return true
+	}else if(a.type === 'text'){
+		if(a.parent.children.length > 1){
+			return
+		}
+		
+		var parentDom = document.getElementById(a.parent.uid)
+		var dom = parentDom.firstChild
+		if(!dom){
+			//console.log('dom not found: ' + a.uid)
+			parentDom.textContent = b.text
+			//return
+		}else{
+		
+			if(a.text !== b.text && b.text){
+				var pos = caretPositionIn(dom)
+				dom.textContent = b.text
+				if(pos !== undefined){
+					var range = document.createRange()
+					range.setStart(dom, pos)
+					range.setEnd(dom, pos)
+					selection = window.getSelection();
+					selection.removeAllRanges();
+					selection.addRange(range)
+				}
+			}
+		}
+		b.uid = a.uid
+		return true
 	}else{
 		var n = {}
+		var nb = {}
 		Object.keys(a).forEach(function(aa){
-			if(aa === 'parent' || aa === 'children') return
+			if(aa === 'parent' || aa === 'children'){
+				return
+			}
 			n[aa] = a[aa]
 		})
-		//console.log('failed attr render: ' + a.type + ' ' + JSON.stringify(n))
+		Object.keys(b).forEach(function(aa){
+			if(aa === 'parent' || aa === 'children'){
+				return
+			}
+			nb[aa] = b[aa]
+		})
+		console.log('failed attr render: ' + a.type + ' ' + JSON.stringify(n) + ' -> ' + JSON.stringify(nb))
+		//console.log('failed: ' + a.
 	}
 }
 
@@ -488,7 +585,10 @@ function different(a, b){
 		}else if(aa === 'style'){
 			if(JSON.stringify(a.style) !== JSON.stringify(b.style)) return 'attrs'
 		}else{
-			if(a[aa] !== b[aa]) return 'attrs'
+			if(a[aa] !== b[aa]){
+				//console.log('object key changed: ' + aa)
+				return 'attrs'
+			}
 		}
 	}
 	if(a.children.length !== b.children.length) return 'children'
@@ -700,7 +800,7 @@ Whittle.prototype.checked = function(v){
 	if(this.cur.type !== 'input'){
 		throw new Error('only INPUT tags can have a checked attribute')
 	}
-	this.cur.checked = v
+	this.cur.checked = !!v
 	return this
 }
 
@@ -805,6 +905,14 @@ exports.attach = function(containerNode, generatorFunction){
 	var w = new Whittle(containerNode, generatorFunction)
 
 	w._refresh()
+	
+	return w._refresh.bind(w)
+}
+
+exports.makeHtmlString = function(generatorFunction){
+	var w = new Whittle(undefined, generatorFunction)
+
+	//w._refresh()
 	
 	return w._refresh.bind(w)
 }
