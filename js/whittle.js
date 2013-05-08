@@ -866,6 +866,15 @@ Whittle.prototype.mouseup = function(cb){
 	this.cur.listeners.push({type: 'mouseup', f: cb})
 	return this
 }
+Whittle.prototype.mouseenter = function(cb){
+	this.cur.listeners.push({type: 'mouseenter', f: cb})
+	return this
+}
+Whittle.prototype.mouseleave = function(cb){
+	this.cur.listeners.push({type: 'mouseleave', f: cb})
+	return this
+}
+
 Whittle.prototype.change = function(cb){
 	this.cur.listeners.push({type: 'change', f: cb})
 	return this
