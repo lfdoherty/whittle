@@ -68,7 +68,8 @@ function render(w, r){
 					+idifyIfNeeded(w, r)
 					+(r.title?' title="'+r.title+'"':'')
 					+(r.name?' name="'+r.name+'"':'')
-					+(r.draggable?' draggable="true"':'')+renderStyle(w,r)+'>'
+					+(r.draggable !== undefined?' draggable="'+(!!r.draggable)+'"':'')
+					+renderStyle(w,r)+'>'
 			html += renderChildren(w,r)
 			html += '</'+r.type+'>'
 		break;
@@ -93,14 +94,15 @@ function render(w, r){
 					+idifyIfNeeded(w, r)
 					+(r.title?' title="'+r.title+'"':'')
 					+(r.contenteditable?' contenteditable="true"':'')
-					+(r.draggable?' draggable="true"':'')+renderStyle(w,r)+'>'
+					+(r.draggable !== undefined?' draggable="'+(!!r.draggable)+'"':'')
+					+renderStyle(w,r)+'>'
 			html += renderChildren(w,r)
 			html += '</'+r.type+'>'
 		break;
 		case 'a':
 			html += '<a'+renderClasses(r)
 					+idifyIfNeeded(w, r)
-					+(r.draggable?' draggable="true"':'')
+					+(r.draggable !== undefined?' draggable="'+(!!r.draggable)+'"':'')
 					+(r.href?' href="'+esc(r.href)+'"':'')
 					+(r.target?' target="'+esc(r.target)+'"':'')
 					+(r.title?' title="'+r.title+'"':'')
@@ -256,14 +258,14 @@ function detachListeners(local, g){
 }
 
 function attachListeners(local, g, useListened){
-	if(g.listeners/* && (!useListened || !g.listened)*/){
+	if(g.listeners && g.listeners.length > 0){
 		g.listened = true
-		g.listeners.forEach(function(r){
-			var dom = document.getElementById(g.uid)
-			if(dom == undefined){
-				throw new Error('cannot find dom node: ' + g.uid)
+		var dom = document.getElementById(g.uid)
+		if(dom == undefined){
+			throw new Error('*cannot find dom node: ' + g.uid + ' to attach listeners to: ' + g.listeners[0].type)
 
-			}
+		}
+		g.listeners.forEach(function(r){
 			
 			if(r.removed){
 				throw new Error('already removed')
@@ -425,7 +427,7 @@ function renderAttrs(a, b){
 		//console.log('rendering input')
 		b.uid = a.uid
 		return true
-	}else if(a.type === 'a'){
+	}else if(a.type === 'a' && a.children.length === 0){
 		var dom = document.getElementById(a.uid)
 		if(!dom){
 			console.log('dom not found: ' + a.uid)
@@ -440,7 +442,7 @@ function renderAttrs(a, b){
 		
 		if(a.target !== b.target && b.target) dom.target = b.target
 		if(a.href !== b.href && b.href) dom.href = b.href
-		if(a.draggable !== b.draggable && b.draggable) dom.draggable = b.draggable
+		if(a.draggable !== b.draggable && b.draggable !== undefined) dom.draggable = b.draggable
 		
 		b.uid = a.uid
 		return true
@@ -468,6 +470,17 @@ function renderAttrs(a, b){
 			return
 		}
 		
+		if(b.children.length > 0){
+			if(b.children.length === 1 && a.children.length === 1 && a.children[0].type === 'text' && b.children[0].type === 'text'){
+				//b.children[0].uid = a.children[0].uid
+				//b.children[0].text = a.children
+				renderAttrs(a.children[0], b.children[0])
+			}else{
+				console.log('failed due to span children: ' + b.children.length + ' ' + a.children.length)
+				return	
+			}
+		}
+		
 		adjustClasses(a, b, dom)
 		
 		var oldStyleStr = stringifyStyle(a)
@@ -476,7 +489,7 @@ function renderAttrs(a, b){
 		
 		//if(a.target !== b.target && b.target) dom.target = b.target
 		//if(a.href !== b.href && b.href) dom.href = b.href
-		if(a.draggable !== b.draggable && b.draggable) dom.draggable = b.draggable
+		if(a.draggable !== b.draggable && b.draggable !== undefined) dom.draggable = b.draggable
 		
 		b.uid = a.uid
 		return true
@@ -563,6 +576,7 @@ function renderPartialChildren(ach, bch){
 				return;
 			}
 		}else{
+			//console.log('other: ' + d)
 			return
 		}
 	}
@@ -582,6 +596,7 @@ function different(a, b){
 		if(aa === 'uid' || aa === 'parent' || aa === 'children' || aa === 'listeners' || aa === 'listened') continue
 		if(aa === 'classes'){
 			if(JSON.stringify(a.classes) !== JSON.stringify(b.classes)) return 'attrs'
+			//console.log(a.uid + ' ' + b.uid + ' ' + JSON.stringify(a.classes) + ' ' + JSON.stringify(b.classes))
 		}else if(aa === 'style'){
 			if(JSON.stringify(a.style) !== JSON.stringify(b.style)) return 'attrs'
 		}else{
@@ -592,6 +607,10 @@ function different(a, b){
 		}
 	}
 	if(a.children.length !== b.children.length) return 'children'
+	/*console.log('comparing children: ' + a.children.length)
+	for(var i=0;i<a.children.length;++i){
+		console.log(a.children[i].uid + ' -> ' + b.children[i].uid)
+	}*/
 	for(var i=0;i<a.children.length;++i){
 		var ac = a.children[i]
 		var bc = b.children[i]
