@@ -407,7 +407,7 @@ function renderAttrs(a, b){
 	if(a.type === 'input'){
 		var dom = document.getElementById(a.uid)
 		if(!dom){
-			console.log('dom not found: ' + a.uid)
+			//console.log('dom not found: ' + a.uid)
 			return
 		}
 		
@@ -430,7 +430,7 @@ function renderAttrs(a, b){
 	}else if(a.type === 'a' && a.children.length === 0){
 		var dom = document.getElementById(a.uid)
 		if(!dom){
-			console.log('dom not found: ' + a.uid)
+			//console.log('dom not found: ' + a.uid)
 			return
 		}
 		
@@ -445,6 +445,7 @@ function renderAttrs(a, b){
 		if(a.draggable !== b.draggable && b.draggable !== undefined) dom.draggable = b.draggable
 		
 		b.uid = a.uid
+		//console.log('updated a')
 		return true
 	}else if(a.type === 'span'){
 		var dom = document.getElementById(a.uid)
@@ -464,9 +465,9 @@ function renderAttrs(a, b){
 				}
 				nb[aa] = b[aa]
 			})
-			console.log('failed attr render: ' + a.type + ' ' + JSON.stringify(n) + ' -> ' + JSON.stringify(nb))
+			//console.log('failed attr render: ' + a.type + ' ' + JSON.stringify(n) + ' -> ' + JSON.stringify(nb))
 
-			console.log('dom not found: ' + a.uid)
+			//console.log('dom not found: ' + a.uid)
 			return
 		}
 		
@@ -476,7 +477,7 @@ function renderAttrs(a, b){
 				//b.children[0].text = a.children
 				renderAttrs(a.children[0], b.children[0])
 			}else{
-				console.log('failed due to span children: ' + b.children.length + ' ' + a.children.length)
+				//console.log('failed due to span children: ' + b.children.length + ' ' + a.children.length)
 				return	
 			}
 		}
@@ -492,6 +493,7 @@ function renderAttrs(a, b){
 		if(a.draggable !== b.draggable && b.draggable !== undefined) dom.draggable = b.draggable
 		
 		b.uid = a.uid
+		//console.log('updated span')
 		return true
 	}else if(a.type === 'text'){
 		if(a.parent.children.length > 1){
@@ -502,24 +504,34 @@ function renderAttrs(a, b){
 		var dom = parentDom.firstChild
 		if(!dom){
 			//console.log('dom not found: ' + a.uid)
+			//console.log('*updated parent text')
 			parentDom.textContent = b.text
 			//return
 		}else{
 		
-			if(a.text !== b.text && b.text){
+			if(a.text !== b.text){// && b.text){
 				var pos = caretPositionIn(dom)
-				dom.textContent = b.text
+				dom.textContent = b.text||''
+				//console.log('*dom text: ' + b.text)
+				//console.log(new Error().stack)
 				if(pos !== undefined){
 					var range = document.createRange()
-					range.setStart(dom, pos)
-					range.setEnd(dom, pos)
-					selection = window.getSelection();
-					selection.removeAllRanges();
-					selection.addRange(range)
+					try{
+						range.setStart(dom, pos)
+						range.setEnd(dom, pos)
+						selection = window.getSelection();
+						selection.removeAllRanges();
+						selection.addRange(range)
+					}catch(e){
+						console.log('WARNING: whittle failed to restore selection at pos ' + pos)
+					}
 				}
+			}else{
+				//console.log('text same ' + b.text + ' ' + a.text)
 			}
 		}
 		b.uid = a.uid
+		//console.log('updated text')
 		return true
 	}else{
 		var n = {}
@@ -584,21 +596,54 @@ function renderPartialChildren(ach, bch){
 	return true
 }
 
+function primitiveArraysAreDifferent(a,b){
+	if(a.length !== b.length) return true
+	for(var i=0;i<a.length;++i){
+		var va = a[i]
+		var vb = b[i]
+		if(va !== vb) return true
+	}
+}
+
+function primitiveMapsAreDifferent(a,b){
+	//console.log(JSON.stringify([a,b]))
+	var aKeys = Object.keys(a)
+	var bKeys = Object.keys(b)
+	if(aKeys.length !== bKeys.length) return true
+	for(var i=0;i<aKeys.length;++i){
+		var ka = aKeys[i]
+		var kb = bKeys[i]
+		if(ka !== kb) return true
+		var va = a[ka]
+		if(a[ka] !== b[ka]) return true
+	}
+}
+
 function different(a, b){
 	if(a.type !== b.type) return 'type'
+	
 	var at = Object.keys(a)
 	var bt = Object.keys(b)
 	if(at.length !== bt.length) return 'attrs'
-	if(JSON.stringify(at) !== JSON.stringify(bt)) return 'attrs'
+	//if(JSON.stringify(at) !== JSON.stringify(bt)) return 'attrs'
+	if(primitiveArraysAreDifferent(at,bt)) return 'attrs'
 	for(var i=0;i<at.length;++i){
 		var aa = at[i]
 		//var ba = bt[i]
 		if(aa === 'uid' || aa === 'parent' || aa === 'children' || aa === 'listeners' || aa === 'listened') continue
 		if(aa === 'classes'){
-			if(JSON.stringify(a.classes) !== JSON.stringify(b.classes)) return 'attrs'
+			if(primitiveArraysAreDifferent(a.classes, b.classes)) return 'attrs'
+			//if(JSON.stringify(a.classes) !== JSON.stringify(b.classes)) return 'attrs'
 			//console.log(a.uid + ' ' + b.uid + ' ' + JSON.stringify(a.classes) + ' ' + JSON.stringify(b.classes))
 		}else if(aa === 'style'){
-			if(JSON.stringify(a.style) !== JSON.stringify(b.style)) return 'attrs'
+			//if(JSON.stringify(a.style) !== JSON.stringify(b.style)) return 'attrs'
+			//if(primitiveMapsAreDifferent(a.style, b.style)) return 'attrs'
+			if(a.style.length !== b.style.length) return 'attrs'
+			for(var j=0;j<a.style.length;++j){
+				var aso = a.style[j]
+				var bso = b.style[j]
+				if(primitiveMapsAreDifferent(aso, bso)) return 'attrs'
+			}
 		}else{
 			if(a[aa] !== b[aa]){
 				//console.log('object key changed: ' + aa)
