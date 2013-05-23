@@ -374,7 +374,9 @@ Whittle.prototype._refresh = function(forceRefresh){
 	
 	attachListeners(this, g, false)//did)//attach event listeners to DOM objects (or delegate?)
 	
-	afterAll(this, g)//activate special 'after' event listeners
+	if(!did){
+		afterAll(this, g)//activate special 'after' event listeners
+	}
 	
 	this._isRefreshing = false
 	//console.log('done render')
