@@ -36,6 +36,7 @@ function renderStyle(w, r){
 	if(r.style.length === 0) return ''
 	return ' style="' + stringifyStyle(r) + '"'
 }
+
 function stringifyStyle(r){
 	var str = ''
 	var many = 0
@@ -417,7 +418,11 @@ function renderAttrs(a, b){
 		
 		var oldStyleStr = stringifyStyle(a)
 		var newStyleStr = stringifyStyle(b)
-		if(oldStyleStr !== newStyleStr) dom.style = newStyleStr
+		if(oldStyleStr !== newStyleStr){
+			//dom.style = newStyleStr
+			//applyStyle(dom, b.style)
+			dom.setAttribute('style', newStyleStr)
+		}
 		
 		if(a.typeAttribute !== b.typeAttribute) dom.type = b.value
 		if(a.min !== b.min) dom.min = b.min
@@ -438,7 +443,11 @@ function renderAttrs(a, b){
 		
 		var oldStyleStr = stringifyStyle(a)
 		var newStyleStr = stringifyStyle(b)
-		if(oldStyleStr !== newStyleStr) dom.style = newStyleStr
+		if(oldStyleStr !== newStyleStr){
+			//dom.style = newStyleStr
+			//applyStyle(dom, b.style)
+			dom.setAttribute('style', newStyleStr)
+		}
 		
 		if(a.target !== b.target && b.target) dom.target = b.target
 		if(a.href !== b.href && b.href) dom.href = b.href
@@ -447,7 +456,7 @@ function renderAttrs(a, b){
 		b.uid = a.uid
 		//console.log('updated a')
 		return true
-	}else if(a.type === 'span'){
+	}else if(a.type === 'span' || a.type === 'div'){
 		var dom = document.getElementById(a.uid)
 		if(!dom){
 
@@ -467,17 +476,21 @@ function renderAttrs(a, b){
 			})
 			//console.log('failed attr render: ' + a.type + ' ' + JSON.stringify(n) + ' -> ' + JSON.stringify(nb))
 
-			//console.log('dom not found: ' + a.uid)
+			console.log('dom not found: ' + a.uid)
 			return
 		}
 		
 		if(b.children.length > 0){
-			if(b.children.length === 1 && a.children.length === 1 && a.children[0].type === 'text' && b.children[0].type === 'text'){
+			if(b.children.length === 1 && a.children.length === 1){// && a.children[0].type === 'text' && b.children[0].type === 'text'){
 				//b.children[0].uid = a.children[0].uid
 				//b.children[0].text = a.children
-				renderAttrs(a.children[0], b.children[0])
+				var res = renderAttrs(a.children[0], b.children[0])
+				//b.children[0] = a.children[0]
+				if(!res){
+					return
+				}
 			}else{
-				//console.log('failed due to span children: ' + b.children.length + ' ' + a.children.length)
+				console.log('failed due to span children: ' + b.children.length + ' ' + a.children.length)
 				return	
 			}
 		}
@@ -486,7 +499,12 @@ function renderAttrs(a, b){
 		
 		var oldStyleStr = stringifyStyle(a)
 		var newStyleStr = stringifyStyle(b)
-		if(oldStyleStr !== newStyleStr) dom.style = newStyleStr
+		if(oldStyleStr !== newStyleStr){
+			//dom.style = newStyleStr
+			console.log('adjusted style: ' + newStyleStr)
+			//applyStyle(dom, b.style)
+			dom.setAttribute('style', newStyleStr)
+		}
 		
 		//if(a.target !== b.target && b.target) dom.target = b.target
 		//if(a.href !== b.href && b.href) dom.href = b.href
@@ -576,7 +594,7 @@ function renderPartialChildren(ach, bch){
 			var did = renderPartialChildren(ac.children, bc.children)
 			//console.log('sub children done: ' + did)			
 			if(!did) {
-				//console.log('children');
+				console.log('children');
 				return;
 			}
 			bc.uid = ac.uid
@@ -584,11 +602,11 @@ function renderPartialChildren(ach, bch){
 			var did = renderAttrs(ac, bc)
 			
 			if(!did) {
-				//console.log('attrs');
+				console.log('attrs');
 				return;
 			}
 		}else{
-			//console.log('other: ' + d)
+			console.log('other: ' + d)
 			return
 		}
 	}
