@@ -59,6 +59,7 @@ function render(w, r){
 			//html += '</div>'
 		break;
 		case 'text':
+			//console.log('text: ' + r.text.length)
 			html += esc(r.text)
 		break;
 		case 'br':
@@ -359,13 +360,16 @@ Whittle.prototype._refresh = function(forceRefresh){
 	
 	g.f(this)//generates the 'whittle object model' (WOM)
 	
+	this._disableObserver()
+	
 	var did
-	if(g.children.length === oldChildren.length && !forceRefresh){
+	if(g.children.length === oldChildren.length && !forceRefresh && !this.shouldRefresh){
 		//console.log('trying partial render')
 		did = renderPartialChildren(oldChildren, g.children)
 	}
+	this.shouldRefresh = false
 	if(!did){
-		//console.log('full re-render')
+		//console.log('full re-render: ' + (!forceRefresh) + ' ' + (!this.shouldRefresh))
 		var html = render(this, g)
 		g.container.innerHTML = html//TODO compare old and new WOM and update as little as possible
 	}
@@ -379,6 +383,9 @@ Whittle.prototype._refresh = function(forceRefresh){
 	}
 	
 	this._isRefreshing = false
+
+	this._enableObserver()
+
 	//console.log('done render')
 }
 
@@ -524,7 +531,7 @@ function renderAttrs(a, b){
 		var dom = parentDom.firstChild
 		if(!dom){
 			//console.log('dom not found: ' + a.uid)
-			//console.log('*updated parent text')
+			//console.log('*updated parent text ' + b.text.length)
 			parentDom.textContent = b.text
 			//return
 		}else{
@@ -532,7 +539,7 @@ function renderAttrs(a, b){
 			if(a.text !== b.text){// && b.text){
 				var pos = caretPositionIn(dom)
 				dom.textContent = b.text||''
-				//console.log('*dom text: ' + b.text)
+				//console.log('*dom text: ' + b.text.length)
 				//console.log(new Error().stack)
 				if(pos !== undefined){
 					var range = document.createRange()
@@ -596,7 +603,7 @@ function renderPartialChildren(ach, bch){
 			var did = renderPartialChildren(ac.children, bc.children)
 			//console.log('sub children done: ' + did)			
 			if(!did) {
-				console.log('children');
+				//console.log('children');
 				return;
 			}
 			bc.uid = ac.uid
@@ -604,11 +611,11 @@ function renderPartialChildren(ach, bch){
 			var did = renderAttrs(ac, bc)
 			
 			if(!did) {
-				console.log('attrs');
+				//console.log('attrs');
 				return;
 			}
 		}else{
-			console.log('other: ' + d)
+			//console.log('other: ' + d)
 			return
 		}
 	}
@@ -997,7 +1004,56 @@ exports.attach = function(containerNode, generatorFunction){
 
 	var w = new Whittle(containerNode, generatorFunction)
 
+	var config = {
+		attributes: true, 
+		childList: true, 
+		characterData: true, 
+		subtree: true
+	};
+	
+	var observer = new MutationObserver(function(mutations) {
+		var doForce = false
+		mutations.forEach(function(mutation) {
+			if(mutation.type === 'childList' && (mutation.target.childNodes.length > 1 || mutation.addedNodes.length > 1 || mutation.addedNodes[0].nodeType !== 3)){
+				doForce = true
+			}
+			//console.log(mutation.type);
+		});
+		if(doForce){
+			//console.log('mutation observer hinting full refresh')
+			w.shouldRefresh = true
+			observer.disconnect()
+			doRefresh()
+		}
+	});
+
+	w._enableObserver = function(){
+		//console.log('begun observing')
+		observer.observe(containerNode, config);
+	}
+	w._disableObserver = function(){
+		//console.log('disabled observing')
+		observer.disconnect()
+	}
+	
 	w._refresh()
+	
+	
+	function doRefresh(){
+		setTimeout(function(){
+			if(w.shouldRefresh){
+				console.log('mutation observer causing full refresh')
+				w._refresh(true)
+			}
+			//observer.observe(containerNode, config);
+		},250)
+	}
+
+	
+	
+	
+	
+	//observer.observe(containerNode, config);
 	
 	return w._refresh.bind(w)
 }
