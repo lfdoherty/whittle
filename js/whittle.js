@@ -367,12 +367,19 @@ Whittle.prototype._refresh = function(forceRefresh){
 		//console.log('trying partial render')
 		did = renderPartialChildren(oldChildren, g.children)
 	}
-	this.shouldRefresh = false
 	if(!did){
 		//console.log('full re-render: ' + (!forceRefresh) + ' ' + (!this.shouldRefresh))
 		var html = render(this, g)
-		g.container.innerHTML = html//TODO compare old and new WOM and update as little as possible
+		/*if(!html){
+			g.container.innerHTML = '-- whittle rendering bug --'
+		}else if(html === 'undefined'){
+			g.container.innerHTML = '-- whittle rendering bug* --'
+		}else{
+			g.container.innerHTML = html+'<div>bug</div>'//TODO compare old and new WOM and update as little as possible
+		}*/
+		g.container.innerHTML = html
 	}
+	this.shouldRefresh = false
 	
 	attachAll(this, g)//activate refreshers
 	
@@ -510,7 +517,7 @@ function renderAttrs(a, b){
 		var newStyleStr = stringifyStyle(b)
 		if(oldStyleStr !== newStyleStr){
 			//dom.style = newStyleStr
-			console.log('adjusted style: ' + newStyleStr)
+			//console.log('adjusted style: ' + newStyleStr)
 			//applyStyle(dom, b.style)
 			dom.setAttribute('style', newStyleStr)
 		}
@@ -554,7 +561,7 @@ function renderAttrs(a, b){
 					}
 				}
 			}else{
-				//console.log('text same ' + b.text + ' ' + a.text)
+				console.log('text same ' + b.text + ' ' + a.text)
 			}
 		}
 		b.uid = a.uid
@@ -575,7 +582,7 @@ function renderAttrs(a, b){
 			}
 			nb[aa] = b[aa]
 		})
-		console.log('failed attr render: ' + a.type + ' ' + JSON.stringify(n) + ' -> ' + JSON.stringify(nb))
+		//console.log('failed attr render: ' + a.type + ' ' + JSON.stringify(n) + ' -> ' + JSON.stringify(nb))
 		//console.log('failed: ' + a.
 	}
 }
@@ -599,7 +606,10 @@ function renderPartialChildren(ach, bch){
 			bch[i] = ac
 			//console.log('no change')
 		}else if(d === 'children'){
-			if(ac.children.length !== bc.children.length) return
+			if(ac.children.length !== bc.children.length){
+				//console.log('children length different ' + ac.children.length + ' !== ' + bc.children.length)
+				return
+			}
 			var did = renderPartialChildren(ac.children, bc.children)
 			//console.log('sub children done: ' + did)			
 			if(!did) {
@@ -616,7 +626,7 @@ function renderPartialChildren(ach, bch){
 			}
 		}else{
 			//console.log('other: ' + d)
-			return
+			//return
 		}
 	}
 	//console.log('children render finished: ' + ach.length)
@@ -861,7 +871,7 @@ Whittle.prototype.type = function(v){
 	return this
 }
 Whittle.prototype.name = function(v){
-	if(this.cur.type !== 'input' && this.cur.type !== 'iframe') throw new Error('only INPUT or IFRAME tags can have a name attribute')
+	if(this.cur.type !== 'input' && this.cur.type !== 'iframe' && this.cur.type !== 'textarea') throw new Error('only INPUT, TEXTAREA or IFRAME tags can have a name attribute')
 	this.cur.name = v
 	return this
 }
@@ -1014,7 +1024,17 @@ exports.attach = function(containerNode, generatorFunction){
 	var observer = new MutationObserver(function(mutations) {
 		var doForce = false
 		mutations.forEach(function(mutation) {
-			if(mutation.type === 'childList' && (mutation.target.childNodes.length > 1 || mutation.addedNodes.length > 1 || mutation.addedNodes[0].nodeType !== 3)){
+			if(mutation.type === 'childList' && (mutation.target.childNodes.length > 1 || mutation.addedNodes.length > 1 || mutation.addedNodes.length === 0 || mutation.addedNodes[0].nodeType !== 3)){
+				/*for(var i=0;i<mutation.target.childNodes.length;++i){
+					var cn = mutation.target.childNodes[i]
+					if(cn.nodeType !== 3){
+						doForce = true
+					}
+				}*/
+				/*console.log('mutation ' + mutation.type + ' ' + 
+					mutation.target.childNodes.length + ' ' + 
+					mutation.addedNodes.length + ' ' + 
+					mutation.addedNodes[0].nodeType)*/
 				doForce = true
 			}
 			//console.log(mutation.type);
