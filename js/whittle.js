@@ -75,8 +75,12 @@ function render(w, r){
 			html += renderChildren(w,r)
 			html += '</'+r.type+'>'
 		break;
+		case 'innerHTML':
+			html += r.innerHTML
+		break;
 		case 'hr':
 		case 'span':
+		case 'p':
 		case 'div':
 		case 'h1':
 		case 'h2':
@@ -659,6 +663,10 @@ function primitiveMapsAreDifferent(a,b){
 function different(a, b){
 	if(a.type !== b.type) return 'type'
 	
+	if(a.type === 'innerHTML' && b.type === 'innerHTML'){
+		return a.innerHTML !== b.innerHTML
+	}
+	
 	var at = Object.keys(a)
 	var bt = Object.keys(b)
 	if(at.length !== bt.length) return 'attrs'
@@ -723,6 +731,9 @@ Whittle.prototype.h5 = function(){
 	return makeNode('h5', this)
 }
 
+Whittle.prototype.p = function(){
+	return makeNode('p', this)
+}
 
 Whittle.prototype.span = function(){
 	return makeNode('span', this)
@@ -802,10 +813,14 @@ Whittle.prototype.clazz = function(v){
 	return this
 }
 Whittle.prototype.text = function(v){
-	//this.cur.text = v
-	//return this
 	makeNode('text', this)
 	this.cur.text = v
+	this.e()
+	return this
+}
+Whittle.prototype.innerHTML = function(v){
+	makeNode('innerHTML', this)
+	this.cur.innerHTML = v
 	this.e()
 	return this
 }
