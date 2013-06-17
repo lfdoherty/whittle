@@ -241,9 +241,11 @@ function attachAll(local, g){
 }*/
 function detachListeners(local, g){
 	if(g.listeners){
-		g.listeners.forEach(function(r){
+		//g.listeners.forEach(function(r){
+		for(var i=0;i<g.listeners.length;++i){
+			var r = g.listeners[i]
 			if(r.func === undefined){
-				throw new Error('weird')
+				console.log('ERROR/WARNING: r.func undefined (listener already detached?)')
 				return
 			}
 			//if(r.func.uid) console.log('removed(' + r.type + '): ' + r.func.uid)
@@ -255,12 +257,18 @@ function detachListeners(local, g){
 			dom.removeEventListener(r.type, r.func)
 			//dom[r.uid] = undefined
 			r.func = undefined
-		})
+		}
 		g.listeners = []
 	}
+	/*
 	g.children.forEach(function(c){
 		detachListeners(local, c)
 	})
+	*/
+	for(var i=0;i<g.children.length;++i){
+		var c = g.children[i]
+		detachListeners(local, c)
+	}
 }
 
 function attachListeners(local, g, useListened){
@@ -323,9 +331,15 @@ function attachListeners(local, g, useListened){
 			dom.addEventListener(r.type, r.func)
 		})
 	}
-	g.children.forEach(function(c){
+	/*g.children.forEach(function(c){
 		attachListeners(local, c, useListened)
 	})//attachListeners.bind(undefined, local))
+	*/
+	for(var i=0;i<g.children.length;++i){
+		var c = g.children[i]
+		//detachListeners(local, c)
+		attachListeners(local, c, useListened)
+	}
 }
 function afterAll(local, g){
 	if(g.listeners){
@@ -340,7 +354,9 @@ function afterAll(local, g){
 }
 Whittle.prototype._refresh = function(forceRefresh){
 
-	if(this._isRefreshing) throw new Error('recursive refresh problem')
+	if(this._isRefreshing){
+		throw new Error('recursive refresh problem')
+	}
 	this._isRefreshing = true
 		
 	var g = this.rootGenerator
@@ -372,7 +388,7 @@ Whittle.prototype._refresh = function(forceRefresh){
 		did = renderPartialChildren(oldChildren, g.children)
 	}
 	if(!did){
-		//console.log('full re-render: ' + (!forceRefresh) + ' ' + (!this.shouldRefresh))
+		console.log('full re-render: ' + (!forceRefresh) + ' ' + (!this.shouldRefresh))
 		var html = render(this, g)
 		/*if(!html){
 			g.container.innerHTML = '-- whittle rendering bug --'
@@ -385,12 +401,24 @@ Whittle.prototype._refresh = function(forceRefresh){
 	}
 	this.shouldRefresh = false
 	
-	attachAll(this, g)//activate refreshers
+	try{
 	
-	attachListeners(this, g, false)//did)//attach event listeners to DOM objects (or delegate?)
+		attachAll(this, g)//activate refreshers
 	
-	if(!did){
-		afterAll(this, g)//activate special 'after' event listeners
+		attachListeners(this, g, false)//did)//attach event listeners to DOM objects (or delegate?)
+	
+		if(!did){
+			afterAll(this, g)//activate special 'after' event listeners
+		}
+	}catch(e){
+		if(did){
+			console.log('ERROR after partial refresh: ' + e.stack)
+			this._isRefreshing = false
+			this._refresh(true)
+			return
+		}else{
+			throw e
+		}
 	}
 	
 	this._isRefreshing = false
@@ -593,10 +621,15 @@ function renderAttrs(a, b){
 
 function copyOverListeners(b, a){
 	if(b.listeners) a.listeners = [].concat(b.listeners)
-	b.children.forEach(function(bc, index){
+	/*b.children.forEach(function(bc, index){
 		var ac = a.children[index]
 		copyOverListeners(bc, ac)
-	})
+	})*/
+	for(var i=0;i<b.children.length;++i){
+		var bc = b.children[i]
+		var ac = a.children[i]
+		copyOverListeners(bc, ac)		
+	}
 }
 
 function renderPartialChildren(ach, bch){
@@ -1039,23 +1072,33 @@ exports.attach = function(containerNode, generatorFunction){
 	var observer = new MutationObserver(function(mutations) {
 		var doForce = false
 		mutations.forEach(function(mutation) {
-			if(mutation.type === 'childList' && (mutation.target.childNodes.length > 1 || mutation.addedNodes.length > 1 || mutation.addedNodes.length === 0 || mutation.addedNodes[0].nodeType !== 3)){
+			if(mutation.type === 'childList' && 
+				(
+					mutation.target.childNodes.length > 1 || 
+					mutation.addedNodes.length > 1 || 
+					mutation.addedNodes.length === 0 || 
+					mutation.addedNodes[0].nodeType !== 3)){
 				/*for(var i=0;i<mutation.target.childNodes.length;++i){
 					var cn = mutation.target.childNodes[i]
 					if(cn.nodeType !== 3){
 						doForce = true
 					}
 				}*/
-				/*console.log('mutation ' + mutation.type + ' ' + 
-					mutation.target.childNodes.length + ' ' + 
-					mutation.addedNodes.length + ' ' + 
-					mutation.addedNodes[0].nodeType)*/
-				doForce = true
+				
+				if(mutation.addedNodes.length === 0 && mutation.removedNodes.length === 1 && mutation.removedNodes[0].nodeType === 3){
+				}else if(mutation.addedNodes.length === 1 && mutation.addedNodes[0].localName === 'br' && mutation.removedNodes.length === 0){
+				}else{
+					console.log('mutation ' + mutation.type)/* + ' ' + 
+						mutation.target.childNodes.length + ' ' + 
+						mutation.addedNodes.length + ' ' + 
+						mutation.addedNodes[0].nodeType)*/
+					doForce = true
+				}
 			}
 			//console.log(mutation.type);
 		});
 		if(doForce){
-			//console.log('mutation observer hinting full refresh')
+			console.log('mutation observer hinting full refresh')
 			w.shouldRefresh = true
 			observer.disconnect()
 			doRefresh()
