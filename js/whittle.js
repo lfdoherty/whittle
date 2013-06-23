@@ -93,7 +93,9 @@ function render(w, r){
 		case 'ul':
 		case 'li':
 		case 'table':
+		case 'tbody':
 		case 'tr':
+		case 'label':
 		case 'select':
 		case 'td':
 			html += '<'+r.type+renderClasses(r)
@@ -318,7 +320,10 @@ function attachListeners(local, g, useListened){
 				e.stopPropagation = function(){
 					did = true
 				}*/
-				return r.f.call(dom, e)
+				local._disableObserver()
+				var res = r.f.call(dom, e)
+				local._enableObserver()
+				return res
 			}
 			//r.func.uid = r.f.uid
 			//r.dom = dom
@@ -796,6 +801,10 @@ Whittle.prototype.hr = function(){
 	return makeNode('hr', this)
 }
 
+Whittle.prototype.label = function(){
+	return makeNode('label', this)
+}
+
 Whittle.prototype.input = function(){
 	return makeNode('input', this)
 }
@@ -805,6 +814,10 @@ Whittle.prototype.textarea = function(){
 Whittle.prototype.table = function(){
 	return makeNode('table', this)
 }
+Whittle.prototype.tbody = function(){
+	return makeNode('tbody', this)
+}
+
 Whittle.prototype.tr = function(){
 	return makeNode('tr', this)
 }
@@ -983,6 +996,14 @@ Whittle.prototype.click = function(cb){
 	this.cur.listeners.push({type: 'click', f: cb})
 	return this
 }
+Whittle.prototype.dblclick = function(cb){
+	if(!this.cur.listeners){
+		throw new Error('cannot listen to whittle root')
+	}
+	
+	this.cur.listeners.push({type: 'dblclick', f: cb})
+	return this
+}
 Whittle.prototype.contextmenu = function(cb){
 	this.cur.listeners.push({type: 'contextmenu', f: cb})
 	return this
@@ -1039,6 +1060,14 @@ Whittle.prototype.dragenter = function(cb){
 }
 Whittle.prototype.dragleave = function(cb){
 	this.cur.listeners.push({type: 'dragleave', f: cb})
+	return this
+}
+Whittle.prototype.focus = function(cb){
+	this.cur.listeners.push({type: 'focus', f: cb})
+	return this
+}
+Whittle.prototype.blur = function(cb){
+	this.cur.listeners.push({type: 'blur', f: cb})
 	return this
 }
 Whittle.prototype.after = function(cb){
@@ -1107,10 +1136,20 @@ exports.attach = function(containerNode, generatorFunction){
 
 	w._enableObserver = function(){
 		//console.log('begun observing')
+		if(this.observerEnabled){
+			console.log('WARNING: already enabled')
+			return
+		}
+		this.observerEnabled = true
 		observer.observe(containerNode, config);
 	}
 	w._disableObserver = function(){
 		//console.log('disabled observing')
+		if(!this.observerEnabled){
+			console.log('WARNING: already disabled')
+			return
+		}
+		this.observerEnabled = false
 		observer.disconnect()
 	}
 	

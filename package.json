@@ -1,6 +1,6 @@
 {
 	"name": "whittle",
-	"version": "0.0.19",
+	"version": "0.0.20",
 	"description": "HTML builder designed for fast clean updating.  Uses matterhorn for browser-side module support.",
 	"author": "Liam Doherty",
 	"main": "js/whittle",
