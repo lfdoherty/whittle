@@ -1,5 +1,13 @@
 
+function isInt(n) {
+   return typeof n === 'number' && n % 1 == 0;
+}
+
+//-----------------
+
 exports.module = module
+
+var disableMutations
 
 function renderChildren(w, r){
 	var html = ''
@@ -28,7 +36,7 @@ function idifyIfNeeded(w, r){
 	//if(r.uid) return ''
 	return idify(w, r)
 }
-function esc(s){
+function esc(s){//TODO angle brackets?
 	s+=''
 	return s.replace(/\"/gi, '&quot;')
 }
@@ -50,6 +58,7 @@ function stringifyStyle(r){
 	})
 	return str
 }
+
 function render(w, r){
 	var html = ''
 	switch(r.type){
@@ -68,16 +77,27 @@ function render(w, r){
 		case 'iframe':
 			html += '<'+r.type+renderClasses(r)
 					+idifyIfNeeded(w, r)
-					+(r.title?' title="'+r.title+'"':'')
-					+(r.name?' name="'+r.name+'"':'')
+					+(r.title?' title="'+esc(r.title)+'"':'')
+					+(r.name?' name="'+esc(r.name)+'"':'')
 					+(r.draggable !== undefined?' draggable="'+(!!r.draggable)+'"':'')
 					+renderStyle(w,r)+'>'
 			html += renderChildren(w,r)
 			html += '</'+r.type+'>'
 		break;
 		case 'innerHTML':
-			html += r.innerHTML
+			html += r.innerHTML//TODO inject after via innerHTML= method to ensure containment?
 		break;
+		
+		case 'colgroup':
+		case 'col':
+			html += '<'+r.type+renderClasses(r)
+					+idifyIfNeeded(w, r)
+					+(r.type === 'td' && r.span!==undefined?'span="'+escInt(r.span)+'"':'')
+					+renderStyle(w,r)+'>'
+			html += renderChildren(w,r)
+			html += '</'+r.type+'>'
+		break;
+		
 		case 'hr':
 		case 'span':
 		case 'p':
@@ -103,6 +123,10 @@ function render(w, r){
 					+(r.title?' title="'+r.title+'"':'')
 					+(r.contenteditable?' contenteditable="true"':'')
 					+(r.draggable !== undefined?' draggable="'+(!!r.draggable)+'"':'')
+					+(r.type === 'td' && r.colspan!==undefined?'colspan="'+r.colspan+'"':'')
+					+(r.type === 'td' && r.rowspan!==undefined?'rowspan="'+r.rowspan+'"':'')
+					+(r.type === 'table' && r.cellspacing!==undefined?'cellspacing="'+r.cellspacing+'"':'')
+					+(r.type === 'table' && r.cellpadding!==undefined?'cellpadding="'+r.cellpadding+'"':'')
 					+renderStyle(w,r)+'>'
 			html += renderChildren(w,r)
 			html += '</'+r.type+'>'
@@ -132,6 +156,7 @@ function render(w, r){
 		break;
 		case 'input':
 		case 'option':
+		case 'button':
 		case 'textarea':
 			html += '<'+r.type+renderClasses(r)+idifyIfNeeded(w, r)
 					+(r.value!==undefined?' value="'+esc(r.value)+'"':'')
@@ -147,6 +172,9 @@ function render(w, r){
 				html += (r.name?' name="'+esc(r.name)+'"':'')
 			}else if(r.type === 'option'){
 				html += (r.selected?' selected':'')
+			}else if(r.type === 'textarea'){
+				html += r.rows!==undefined?' rows="'+r.rows+'"':''
+				html += r.cols!==undefined?' cols="'+r.cols+'"':''
 			}
 			html += '>'
 			html += renderChildren(w,r)
@@ -191,6 +219,8 @@ Whittle.prototype.refresher = function(obj, start, stop){
 	}
 	
 	this.generator.refreshers.push({obj: obj, start: start, stop: stop})
+	
+	return this
 }
 
 Whittle.prototype._pushGenerator = function(rest, f){
@@ -773,8 +803,13 @@ Whittle.prototype.p = function(){
 	return makeNode('p', this)
 }
 
-Whittle.prototype.span = function(){
-	return makeNode('span', this)
+Whittle.prototype.span = function(v){
+	if(this.cur.type === 'col' || this.cur.type === 'colgroup'){
+		this.cur.span = v
+		return this
+	}else{
+		return makeNode('span', this)
+	}
 }
 Whittle.prototype.i = function(){
 	return makeNode('i', this)
@@ -811,6 +846,21 @@ Whittle.prototype.input = function(){
 Whittle.prototype.textarea = function(){
 	return makeNode('textarea', this)
 }
+Whittle.prototype.rows = function(v){
+	if(this.cur.type !== 'textarea'){
+		throw new Error('only TEXTAREA tags can have a rows attribute')
+	}
+	this.cur.rows = v
+	return this
+}
+Whittle.prototype.cols = function(v){
+	if(this.cur.type !== 'textarea'){
+		throw new Error('only TEXTAREA tags can have a cols attribute')
+	}
+	this.cur.cols = v
+	return this
+}
+
 Whittle.prototype.table = function(){
 	return makeNode('table', this)
 }
@@ -823,6 +873,50 @@ Whittle.prototype.tr = function(){
 }
 Whittle.prototype.td = function(){
 	return makeNode('td', this)
+}
+
+Whittle.prototype.colspan = function(v){
+	if(this.cur.type !== 'td'){
+		throw new Error('only TD tags can have a colspan attribute')
+	}
+	if(!isInt(v)) throw new Error('colspan value must be an integer')
+	this.cur.colspan = v
+	return this
+}
+Whittle.prototype.rowspan = function(v){
+	if(this.cur.type !== 'td'){
+		throw new Error('only TD tags can have a rowspan attribute')
+	}
+	if(!isInt(v)) throw new Error('rowspan value must be an integer')
+	this.cur.rowspan = v
+	return this
+}
+
+Whittle.prototype.cellspacing = function(v){
+	if(this.cur.type !== 'table'){
+		throw new Error('only TABLE tags can have a cellspacing attribute')
+	}
+	this.cur.colspan = v
+	return this
+}
+
+Whittle.prototype.cellpadding = function(v){
+	if(this.cur.type !== 'table'){
+		throw new Error('only TABLE tags can have a cellpadding attribute')
+	}
+	this.cur.colspan = v
+	return this
+}
+
+Whittle.prototype.colgroup = function(){
+	return makeNode('colgroup', this)
+}
+Whittle.prototype.col = function(){
+	return makeNode('col', this)
+}
+
+Whittle.prototype.button = function(){
+	return makeNode('button', this)
 }
 
 Whittle.prototype.form = function(){
@@ -849,12 +943,28 @@ Whittle.prototype.title = function(v){
 	return this
 }
 Whittle.prototype.value = function(v){
+	//TODO check validity given tag type
 	this.cur.value = v
 	return this
 }
 
+//ID and NAME tokens must begin with a letter ([A-Za-z]) and may be followed 
+//by any number of letters, digits ([0-9]), hyphens ("-"), underscores ("_"), colons (":"), and periods (".").
+
+var InvalidClassNameRestPattern = /[^A-Za-z0-9:_\.\-]/;
+
 Whittle.prototype.clazz = function(v){
-	//TODO validate
+
+	if(v.length === 0) throw new Error('class name cannot be zero length')
+	
+	var firstLetter = v.charCodeAt(0)
+	if(firstLetter < 65 || (firstLetter > 90 && firstLetter < 97) || firstLetter > 122){
+		throw new Error('The first letter of a class name must be in the range [A-Za-z]: ' + v)
+	}
+	if(InvalidClassNameRestPattern.test(v)){
+		throw new Error('Not a valid class name: ' + v)
+	}
+
 	this.cur.classes.push(v)
 	return this
 }
@@ -880,10 +990,14 @@ Whittle.prototype.placeholder = function(v){
 	return this
 }
 Whittle.prototype.contenteditable = function(v){
+	if(!(typeof(v) === 'boolean')) throw new Error('contenteditable attribute must be a boolean')
+	
 	this.cur.contenteditable = v
 	return this
 }
 Whittle.prototype.draggable = function(v){
+	if(!(typeof(v) === 'boolean')) throw new Error('draggable attribute must be a boolean')
+
 	this.cur.draggable = v
 	return this
 }
@@ -928,6 +1042,7 @@ Whittle.prototype.type = function(v){
 	if(this.cur.type !== 'input'){
 		throw new Error('only INPUT tags can have a type attribute')
 	}
+	//TODO validate
 	this.cur.typeAttribute = v
 	return this
 }
@@ -1100,6 +1215,8 @@ exports.attach = function(containerNode, generatorFunction){
 	
 	var observer = new MutationObserver(function(mutations) {
 		var doForce = false
+		if(disableMutations) return
+		
 		mutations.forEach(function(mutation) {
 			if(mutation.type === 'childList' && 
 				(
@@ -1172,7 +1289,13 @@ exports.attach = function(containerNode, generatorFunction){
 	
 	//observer.observe(containerNode, config);
 	
-	return w._refresh.bind(w)
+	var f = w._refresh.bind(w)
+	f.avoidMutation = function(cb){
+		w._disableObserver()
+		cb()
+		w._enableObserver()
+	}
+	return f
 }
 
 exports.makeHtmlString = function(generatorFunction){
@@ -1181,4 +1304,8 @@ exports.makeHtmlString = function(generatorFunction){
 	//w._refresh()
 	
 	return w._refresh.bind(w)
+}
+
+exports.disableMutationRefresh = function(status){
+	disableMutations = status
 }
