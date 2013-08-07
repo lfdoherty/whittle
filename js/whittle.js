@@ -638,13 +638,18 @@ Whittle.prototype._refresh = function(forceRefresh){
 		attachListeners(this, g, false)//did)//attach event listeners to DOM objects (or delegate?)
 	
 		if(!did){
-			afterAll(this, g)//activate special 'after' event listeners
+			try{
+				afterAll(this, g)//activate special 'after' event listeners
+			}catch(e){
+				console.log('ERROR in after listeners: ' + e.stack)
+			}
 		}
 	}catch(e){
 		if(did){
 			console.log('ERROR after partial refresh: ' + e.stack)
 			this._isRefreshing = false
 			this._refresh(true)
+			this._enableObserver()
 			return
 		}else{
 			throw e
