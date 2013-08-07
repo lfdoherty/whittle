@@ -1,6 +1,25 @@
 
+try{
+	var page = require('fpage')
+}catch(e){
+	console.log('whittle fallback: ' + e)
+	page = {}
+}
+
 function isInt(n) {
    return typeof n === 'number' && n % 1 == 0;
+}
+
+if(global.window){
+	var MutationObserver = (function () {
+	  var prefixes = ['WebKit', 'Moz', 'O', 'Ms', '']
+	  for(var i=0; i < prefixes.length; i++) {
+		if(window[prefixes[i] + 'MutationObserver']) {
+		  return window[prefixes[i] + 'MutationObserver'];
+		}
+	  }
+	  return false;
+	}());
 }
 
 //-----------------
@@ -9,15 +28,35 @@ exports.module = module
 
 var disableMutations
 
+var whittles = []
+function registerWhittle(w){
+	whittles.push(w)
+}
+
+//A very handy service for automated fuzz testing and examining the full set of actions/events available (via whittle) on a page
+global.getWhittleActions = function(){
+	var actions = []
+	for(var i=0;i<whittles.length;++i){
+		var w = whittles[i]
+		actions = actions.concat(w.getActions())
+	}
+	return actions
+}
+global.doWhittleAction = function(actionString){
+	
+}
+
 function renderChildren(w, r){
 	var html = ''
-	r.children.forEach(function(c){
-		html += render(w, c)
-	})
+	if(r.children){
+		r.children.forEach(function(c){
+			html += render(w, c)
+		})
+	}
 	return html
 }
 function renderClasses(r){
-	if(r.classes.length === 0) return ''
+	if(!r.classes || r.classes.length === 0) return ''
 	var c = ' class="'
 	r.classes.forEach(function(clazz, index){
 		if(index > 0) c += ' '
@@ -36,12 +75,35 @@ function idifyIfNeeded(w, r){
 	//if(r.uid) return ''
 	return idify(w, r)
 }
+
+var translate_re = /[\&\"\<\>]/g;
+var translate = {
+	"&": "&amp;", 
+	"\"": "&quot;",
+	"<": "&lt;",
+	">": "&gt;"
+};
+
+//var curStr
+function replaceHtmlEntitiesCb(match, entity, str) { 
+	var c = str[entity]
+	return translate[c];
+}
+function replaceHtmlEntities(s){
+	return s.replace(translate_re, replaceHtmlEntitiesCb);
+}
+
 function esc(s){//TODO angle brackets?
-	s+=''
-	return s.replace(/\"/gi, '&quot;')
+	/*s+=''
+	var res = s.replace(/\"/gi, '&quot;')
+	var res = s.replace(/>/gi, '&gt;')
+	var res = s.replace(/</gi, '&lt;')*/
+	var res = replaceHtmlEntities(s)
+	//console.log(s + ' -> ' + res)
+	return res
 }
 function renderStyle(w, r){
-	if(r.style.length === 0) return ''
+	if(!r.style || r.style.length === 0) return ''
 	return ' style="' + stringifyStyle(r) + '"'
 }
 
@@ -168,6 +230,7 @@ function render(w, r){
 				html += (r.max!==undefined?' max="'+esc(r.max)+'"':'')
 				html += (r.step?' step="'+esc(r.step)+'"':'')
 				html += (r.checked?' checked':'')
+				html += (r.disabled?' disabled':'')
 				html += (r.spellcheck!==undefined?' spellcheck="'+(!!r.spellcheck)+'"':'')
 				html += (r.name?' name="'+esc(r.name)+'"':'')
 			}else if(r.type === 'option'){
@@ -189,20 +252,177 @@ function render(w, r){
 
 var globalIds = 1
 
-function Whittle(container, generatorFunc){
+function isEventable(eventName, obj){
+	if(!obj.listeners) return
+	
+	var events = EventSequenceMap[eventName] || [eventName]
+	
+	for(var i=0;i<obj.listeners.length;++i){
+		var list = obj.listeners[i]
+		//if(list.type === eventName) return true
+		for(var j=0;j<events.length;++j){
+			var ev = events[j]
+			if(list.type === ev) return true
+		}
+	}
+}
+
+var EventSequenceMap = {
+	'click': ['mousedown', 'click', 'mouseup']
+}
+
+if(page.server){
+	//console.log('in whittle')
+	//var indexByClazz = {}
+
+	function eventAny(eventName){
+		var count = 0
+		function countEventable(obj){
+			if(isEventable(eventName, obj)) ++count
+		}
+		//whittles.forEach(function(w){
+		for(var i=0;i<whittles.length;++i){
+			var w = whittles[i]
+			walkAll(w.rootGenerator, countEventable)
+		}
+
+		var events = EventSequenceMap[eventName] || [eventName]
+		
+		//console.log(eventName+'able count: ' + count)
+		
+		var index = Math.floor(Math.random()*(count-1))
+		
+		//console.log('going to click: ' + index)
+
+		var count = 0
+		function checkEventable(obj){
+			if(isEventable(eventName, obj)){
+				if(count === index){
+					//console.log(eventName+'ing any: ' + index + ' ' + obj.type + ' ' + JSON.stringify(obj.classes))
+					//simulateEvent(eventName/*'click'*/, obj)
+					//events.forEach(function(ev){
+					for(var j=0;j<events.length;++j){
+						var ev = events[j]
+						simulateEvent(ev, obj)
+					}
+				}
+				++count
+			}
+		}
+		for(var i=0;i<whittles.length;++i){
+			var w = whittles[i]
+			if(count > index) break
+			walkAll(w.rootGenerator, checkEventable)
+		}
+	}
+	page.server.clickAny = eventAny.bind(undefined, 'click')
+	page.server.eventAny = eventAny
+	
+	page.server.click = function(selector){
+		var did = false
+		whittles.forEach(function(w){
+			if(did) return
+			var arr = w.doSelector(selector)
+			if(arr.length > 1){
+				throw new Error('too many options: ' + arr.length + ' for ' + selector)
+			}else if(arr.length === 1){
+				did = true
+				simulateEvent('click', arr[0])
+			}
+		})
+		//console.log('whittles: ' + whittles.length)
+		//throw new Error('TODO: ' + selector + ' ' + whittles.length)
+	}
+}else{
+	console.log('in whittle not server')
+}
+
+function simulateEvent(eventName, target){
+	//throw new Error('TODO: ' + eventName)
+	
+	page.fireGlobalEvent(eventName)
+	
+	if(target.listeners){
+	
+		for(var i=0;i<target.listeners.length;++i){
+			var list = target.listeners[i]
+			//console.log(list.type + ' ')
+			if(list.type === eventName){
+				var e = {
+					preventDefault: function(){
+					},
+					stopPropagation: function(){
+					}
+				}
+				//console.log('simulating event: ' + eventName)
+				list.f.call(target, e)
+			}
+		}
+	}
+}
+
+function Whittle(setHtml, generatorFunc){
 	//this.container = container
 	//this.stack = []
-	this.generator = this.rootGenerator = {type: 'generator', refreshers: [], f: generatorFunc, children: [], container: container}
+	
+	
+	this.generator = this.rootGenerator = {type: 'generator', refreshers: [], f: generatorFunc, children: [], setHtml: setHtml}
 	this.generators = [this.generator]
 	this.cur = this.generator
 	//this.cur = this.root = {type: 'root', children: []}
 	this.nextUid = 1000
 	this.selfId = ++globalIds
+	
+	this.indexByClazz = {}
+	this.hasIndexByClazz = {}
 
 	var local = this	
 	this.refreshFunc = function(){
 		local._refresh()
 	}
+
+	//console.log('made whittle')
+	
+	registerWhittle(this)
+}
+
+function walkAll(cur, cb){
+	if(cur.children){
+		for(var i=0;i<cur.children.length;++i){
+			var c = cur.children[i]
+			cb(c)
+			walkAll(c, cb)
+		}
+	}
+}
+
+Whittle.prototype.doSelector = function(selector){
+	if(selector[0] === '.' && selector.indexOf('.', 1) === -1){
+		var className = selector.substr(1)
+		var result = []
+		walkAll(this.rootGenerator, function(obj){
+			if(obj.classes && obj.classes.indexOf(className) !== -1){
+				result.push(obj)
+			}
+		})
+		return result
+	}else{
+		throw new Error('TODO: ' + selector)
+		return []
+	}
+}
+
+Whittle.prototype.getActions = function(){
+	var actions = []
+	walkAll(this.rootGenerator, function(g){
+		var listeners = g.listeners
+		if(listeners){
+			listeners.forEach(function(listener){
+				actions.push({id: g.uid, type: listener.type, func: listener.func})
+			})
+		}
+	})
+	return actions
 }
 
 Whittle.prototype._makeUid = function(){
@@ -221,29 +441,6 @@ Whittle.prototype.refresher = function(obj, start, stop){
 	this.generator.refreshers.push({obj: obj, start: start, stop: stop})
 	
 	return this
-}
-
-Whittle.prototype._pushGenerator = function(rest, f){
-	var local = this
-	var n = {
-		type: 'generator',
-		refreshers: [], 
-		f: function(){
-			f.apply(local, rest)
-		},
-		children: []
-	}
-	this.generator.children.push(n)
-	this.generator = n
-	this.generators.push(n)
-}
-Whittle.prototype._popGenerator = function(){
-	this.generators.pop()
-	this.generator = this.generators[this.generators.length-1]
-	if(this.generator === undefined){
-		debug
-		throw new Error('popped too many generators - none left')
-	}
 }
 
 function detachAll(local, g){
@@ -272,12 +469,17 @@ function attachAll(local, g){
 	return false
 }*/
 function detachListeners(local, g){
+
+	if(page.server){
+		return
+	}
+
 	if(g.listeners){
 		//g.listeners.forEach(function(r){
 		for(var i=0;i<g.listeners.length;++i){
 			var r = g.listeners[i]
 			if(r.func === undefined){
-				console.log('ERROR/WARNING: r.func undefined (listener already detached?)')
+				console.log('ERROR/WARNING: r.func undefined (listener already detached?) ' + g.type + ' ' + JSON.stringify(g.classes))
 				return
 			}
 			//if(r.func.uid) console.log('removed(' + r.type + '): ' + r.func.uid)
@@ -297,13 +499,27 @@ function detachListeners(local, g){
 		detachListeners(local, c)
 	})
 	*/
-	for(var i=0;i<g.children.length;++i){
-		var c = g.children[i]
-		detachListeners(local, c)
+	if(g.children){
+		for(var i=0;i<g.children.length;++i){
+			var c = g.children[i]
+			detachListeners(local, c)
+		}
 	}
 }
 
+function walkAll(g, cb){
+	cb(g)
+	if(g.children){
+		for(var i=0;i<g.children.length;++i){
+			var c = g.children[i]
+			walkAll(c, cb)
+		}
+	}
+}
 function attachListeners(local, g, useListened){
+	if(page.server){
+		return
+	}
 	if(g.listeners && g.listeners.length > 0){
 		g.listened = true
 		var dom = document.getElementById(g.uid)
@@ -319,19 +535,7 @@ function attachListeners(local, g, useListened){
 			
 			if(!r.uid) r.uid = Math.random()
 
-			var guid = Math.random()
-			/*if(r.type === 'createNew'){
-				if(dom.strange){
-					throw new Error('TODO')
-				}
-				dom.strange = guid
-			}
-			
-			
-			
-			if(dom[r.uid]){
-				dom.removeEventListener(r.type, dom[r.uid])
-			}*/
+			//var guid = Math.random()
 			
 			if(r.func){
 				throw new Error('adding already-added listener: ' + r.uid + ' ' + g.uid)
@@ -341,15 +545,6 @@ function attachListeners(local, g, useListened){
 			
 			//console.log('adding ' + r.type + ' ' + g.uid + ' ' + guid + ' ' + r.uid)
 			r.func = function(e){
-				/*if(!isInDom(dom)){
-					throw new Error('ignoring event for object no longer in DOM: ' + e.id)
-				}*/
-				//console.log('calling ' + g.uid + ' ' + guid + ' ' + r.uid)
-				/*var oldStop = e.stopPropagation
-				var did = false
-				e.stopPropagation = function(){
-					did = true
-				}*/
 				local._disableObserver()
 				var res = r.f.call(dom, e)
 				local._enableObserver()
@@ -370,10 +565,12 @@ function attachListeners(local, g, useListened){
 		attachListeners(local, c, useListened)
 	})//attachListeners.bind(undefined, local))
 	*/
-	for(var i=0;i<g.children.length;++i){
-		var c = g.children[i]
-		//detachListeners(local, c)
-		attachListeners(local, c, useListened)
+	if(g.children){
+		for(var i=0;i<g.children.length;++i){
+			var c = g.children[i]
+			//detachListeners(local, c)
+			attachListeners(local, c, useListened)
+		}
 	}
 }
 function afterAll(local, g){
@@ -385,7 +582,9 @@ function afterAll(local, g){
 			r.f.call(dom)
 		})
 	}
-	g.children.forEach(afterAll.bind(undefined, local))
+	if(g.children){
+		g.children.forEach(afterAll.bind(undefined, local))
+	}
 }
 Whittle.prototype._refresh = function(forceRefresh){
 
@@ -396,7 +595,7 @@ Whittle.prototype._refresh = function(forceRefresh){
 		
 	var g = this.rootGenerator
 
-	if(!g.container){//just writing to string
+	if(!g.setHtml){//just writing to string
 		g.refreshers = []
 		g.children = []
 	
@@ -418,21 +617,17 @@ Whittle.prototype._refresh = function(forceRefresh){
 	this._disableObserver()
 	
 	var did
-	if(g.children.length === oldChildren.length && !forceRefresh && !this.shouldRefresh){
-		//console.log('trying partial render')
-		did = renderPartialChildren(oldChildren, g.children)
+	if(!page.server){
+		if(g.children.length === oldChildren.length && !forceRefresh && !this.shouldRefresh){
+			//console.log('trying partial render')
+			did = renderPartialChildren(oldChildren, g.children)
+		}
 	}
+	
 	if(!did){
 		console.log('full re-render: ' + (!forceRefresh) + ' ' + (!this.shouldRefresh))
 		var html = render(this, g)
-		/*if(!html){
-			g.container.innerHTML = '-- whittle rendering bug --'
-		}else if(html === 'undefined'){
-			g.container.innerHTML = '-- whittle rendering bug* --'
-		}else{
-			g.container.innerHTML = html+'<div>bug</div>'//TODO compare old and new WOM and update as little as possible
-		}*/
-		g.container.innerHTML = html
+		g.setHtml(html)
 	}
 	this.shouldRefresh = false
 	
@@ -463,6 +658,8 @@ Whittle.prototype._refresh = function(forceRefresh){
 	//console.log('done render')
 }
 
+Whittle.prototype.refresh = Whittle.prototype._refresh
+
 function adjustClasses(a, b, dom){
 	b.classes.forEach(function(c){
 		if(a.classes.indexOf(c) === -1){
@@ -478,13 +675,15 @@ function adjustClasses(a, b, dom){
 
 function caretPositionIn(div){
 	var sel = window.getSelection();
-	var range  = sel.getRangeAt(0);
-	if(range.startContainer !== div && (
-			range.startContainer.parentNode !== div || 
-			range.startContainer.parentNode.childNodes[0] !== range.startContainer)){
-		return
+	if(sel.rangeCount > 0){
+		var range  = sel.getRangeAt(0);
+		if(range.startContainer !== div && (
+				range.startContainer.parentNode !== div || 
+				range.startContainer.parentNode.firstChild !== range.startContainer)){
+			return
+		}
+		return range.startOffset
 	}
-	return range.startOffset
 }
 
 function renderAttrs(a, b){
@@ -620,7 +819,7 @@ function renderAttrs(a, b){
 					try{
 						range.setStart(dom, pos)
 						range.setEnd(dom, pos)
-						selection = window.getSelection();
+						var selection = window.getSelection();
 						selection.removeAllRanges();
 						selection.addRange(range)
 					}catch(e){
@@ -777,7 +976,8 @@ function different(a, b){
 }
 
 function makeNode(type,local){
-	var n = {type: type, classes: [], listeners: [], children: [], parent: local.cur, style: [], uid: 'wuid_'+local._makeUid(), listened: false}
+	var n = {type: type, /*classes: [], listeners: [], children: [], */parent: local.cur, /*style: [],*/ uid: 'wuid_'+local._makeUid()/*, listened: false*/}
+	if(!local.cur.children) local.cur.children = []
 	local.cur.children.push(n)
 	local.cur = n
 	return local
@@ -965,6 +1165,22 @@ Whittle.prototype.clazz = function(v){
 		throw new Error('Not a valid class name: ' + v)
 	}
 
+	if(page.server){
+		var index = this.indexByClazz
+		var hasIndex = this.hasIndexByClazz
+		if(!hasIndex[v] || !hasIndex[v][this.cur]){
+			if(!hasIndex[v]) hasIndex[v] = {}
+			var arr = index[v]
+			if(!arr) arr = index[v] = []
+			arr.push(this.cur)
+			hasIndex[v][this.cur] = true
+		}
+	}
+	
+//	console.log('clazz: ' + v)
+
+	if(!this.cur.classes) this.cur.classes = []
+
 	this.cur.classes.push(v)
 	return this
 }
@@ -982,6 +1198,7 @@ Whittle.prototype.innerHTML = function(v){
 }
 Whittle.prototype.style = function(v){
 	//TODO validate
+	if(!this.cur.style) this.cur.style = []
 	this.cur.style.push(v)
 	return this
 }
@@ -1080,7 +1297,13 @@ Whittle.prototype.checked = function(v){
 	this.cur.checked = !!v
 	return this
 }
-
+Whittle.prototype.disabled = function(v){
+	if(this.cur.type !== 'input' && this.cur.type !== 'select' && this.cur.type !== 'option' && this.cur.type !== 'textarea'){
+		throw new Error('only INPUT, SELECT, OPTION, and TEXTAREA tags can have a disabled attribute')
+	}
+	this.cur.disabled = !!v
+	return this
+}
 Whittle.prototype.spellcheck = function(v){
 	//if(this.cur.type !== 'input') throw new Error('only INPUT tags can have a checked attribute')
 	this.cur.spellcheck = v
@@ -1104,88 +1327,99 @@ Whittle.prototype.e = function(){
 }
 
 Whittle.prototype.click = function(cb){
-	if(!this.cur.listeners){
-		throw new Error('cannot listen to whittle root')
-	}
-	
+	if(!this.cur.listeners) this.cur.listeners = []
 	this.cur.listeners.push({type: 'click', f: cb})
 	return this
 }
 Whittle.prototype.dblclick = function(cb){
-	if(!this.cur.listeners){
-		throw new Error('cannot listen to whittle root')
-	}
-	
+	if(!this.cur.listeners) this.cur.listeners = []
 	this.cur.listeners.push({type: 'dblclick', f: cb})
 	return this
 }
 Whittle.prototype.contextmenu = function(cb){
+	if(!this.cur.listeners) this.cur.listeners = []
 	this.cur.listeners.push({type: 'contextmenu', f: cb})
 	return this
 }
 
 Whittle.prototype.mousedown = function(cb){
+	if(!this.cur.listeners) this.cur.listeners = []
 	this.cur.listeners.push({type: 'mousedown', f: cb})
 	return this
 }
 Whittle.prototype.mouseup = function(cb){
+	if(!this.cur.listeners) this.cur.listeners = []
 	this.cur.listeners.push({type: 'mouseup', f: cb})
 	return this
 }
 Whittle.prototype.mouseenter = function(cb){
+	if(!this.cur.listeners) this.cur.listeners = []
 	this.cur.listeners.push({type: 'mouseenter', f: cb})
 	return this
 }
 Whittle.prototype.mouseleave = function(cb){
+	if(!this.cur.listeners) this.cur.listeners = []
 	this.cur.listeners.push({type: 'mouseleave', f: cb})
 	return this
 }
 
 Whittle.prototype.change = function(cb){
+	if(!this.cur.listeners) this.cur.listeners = []
 	this.cur.listeners.push({type: 'change', f: cb})
 	return this
 }
 Whittle.prototype.keyup = function(cb){
+	if(!this.cur.listeners) this.cur.listeners = []
 	this.cur.listeners.push({type: 'keyup', f: cb})
 	return this
 }
 Whittle.prototype.keydown = function(cb){
+	if(!this.cur.listeners) this.cur.listeners = []
 	this.cur.listeners.push({type: 'keydown', f: cb})
 	return this
 }
 Whittle.prototype.keypress = function(cb){
+	if(!this.cur.listeners) this.cur.listeners = []
 	this.cur.listeners.push({type: 'keypress', f: cb})
 	return this
 }
 Whittle.prototype.dragstart = function(cb){
+	if(!this.cur.listeners) this.cur.listeners = []
 	this.cur.listeners.push({type: 'dragstart', f: cb})
 	return this
 }
 Whittle.prototype.drop = function(cb){
+	if(!this.cur.listeners) this.cur.listeners = []
 	this.cur.listeners.push({type: 'drop', f: cb})
 	return this
 }
 Whittle.prototype.dragover = function(cb){
+	if(!this.cur.listeners) this.cur.listeners = []
 	this.cur.listeners.push({type: 'dragover', f: cb})
 	return this
 }
 Whittle.prototype.dragenter = function(cb){
+	if(!this.cur.listeners) this.cur.listeners = []
 	this.cur.listeners.push({type: 'dragenter', f: cb})
 	return this
 }
 Whittle.prototype.dragleave = function(cb){
+	if(!this.cur.listeners) this.cur.listeners = []
 	this.cur.listeners.push({type: 'dragleave', f: cb})
 	return this
 }
 Whittle.prototype.focus = function(cb){
+	if(!this.cur.listeners) this.cur.listeners = []
 	this.cur.listeners.push({type: 'focus', f: cb})
 	return this
 }
 Whittle.prototype.blur = function(cb){
+	if(!this.cur.listeners) this.cur.listeners = []
 	this.cur.listeners.push({type: 'blur', f: cb})
 	return this
 }
 Whittle.prototype.after = function(cb){
+	if(!this.cur.listeners) this.cur.listeners = []
 	this.cur.listeners.push({type: '_after', f: cb})
 	return this
 }
@@ -1195,83 +1429,56 @@ Whittle.prototype.also = function(f){
 }
 
 Whittle.prototype.listen = function(eventName, cb){
-	if(!this.cur.listeners){
-		throw new Error('cannot listen to whittle root')
-	}
+	if(!this.cur.listeners) this.cur.listeners = []
 	this.cur.listeners.push({type: eventName, f: cb})
 	return this
 }
 
-exports.attach = function(containerNode, generatorFunction){
+exports.page = function(generatorFunction){
+	//console.log(JSON.stringify(page))
+	console.log('in page')
 
-	var w = new Whittle(containerNode, generatorFunction)
-
-	var config = {
-		attributes: true, 
-		childList: true, 
-		characterData: true, 
-		subtree: true
-	};
+	function setHtml(html){
+		if(!hasLoaded) return
+		page.setBodyHtml(html)
+	}
 	
-	var observer = new MutationObserver(function(mutations) {
-		var doForce = false
-		if(disableMutations) return
+	if(page.server){
+
+		function stub(){}
 		
-		mutations.forEach(function(mutation) {
-			if(mutation.type === 'childList' && 
-				(
-					mutation.target.childNodes.length > 1 || 
-					mutation.addedNodes.length > 1 || 
-					mutation.addedNodes.length === 0 || 
-					mutation.addedNodes[0].nodeType !== 3)){
-				/*for(var i=0;i<mutation.target.childNodes.length;++i){
-					var cn = mutation.target.childNodes[i]
-					if(cn.nodeType !== 3){
-						doForce = true
-					}
-				}*/
-				
-				if(mutation.addedNodes.length === 0 && mutation.removedNodes.length === 1 && mutation.removedNodes[0].nodeType === 3){
-				}else if(mutation.addedNodes.length === 1 && mutation.addedNodes[0].localName === 'br' && mutation.removedNodes.length === 0){
-				}else{
-					console.log('mutation ' + mutation.type)/* + ' ' + 
-						mutation.target.childNodes.length + ' ' + 
-						mutation.addedNodes.length + ' ' + 
-						mutation.addedNodes[0].nodeType)*/
-					doForce = true
-				}
+		function setup(w){
+		
+			w._enableObserver = function(){
 			}
-			//console.log(mutation.type);
-		});
-		if(doForce){
-			console.log('mutation observer hinting full refresh')
-			w.shouldRefresh = true
-			observer.disconnect()
-			doRefresh()
+			w._disableObserver = function(){
+			}
+			
+			hasLoaded = true
+		
+			w._refresh()
 		}
-	});
+		return attach(setHtml, generatorFunction, setup)
+	}else{
+		//var hasLoaded = document.readyState === 'interactive' || document.readyState === 'complete'
+		
+		function otherSetup(w){
+			page.ready(function(){
+				//otherSetup(h)
+				//w._refresh()
+				hasLoaded = true
+				defaultSetupMutationObserver(document.body, w)
+			})
+		}
+		var h = attach(setHtml, generatorFunction, otherSetup)
 
-	w._enableObserver = function(){
-		//console.log('begun observing')
-		if(this.observerEnabled){
-			console.log('WARNING: already enabled')
-			return
-		}
-		this.observerEnabled = true
-		observer.observe(containerNode, config);
+		return h
 	}
-	w._disableObserver = function(){
-		//console.log('disabled observing')
-		if(!this.observerEnabled){
-			console.log('WARNING: already disabled')
-			return
-		}
-		this.observerEnabled = false
-		observer.disconnect()
-	}
-	
-	w._refresh()
-	
+}
+
+function defaultSetupMutationObserver(containerNode, w){
+
+	if(!containerNode) throw new Error('containerNode is null')
 	
 	function doRefresh(){
 		setTimeout(function(){
@@ -1282,12 +1489,88 @@ exports.attach = function(containerNode, generatorFunction){
 			//observer.observe(containerNode, config);
 		},250)
 	}
+	
+	var config = {
+		attributes: true, 
+		childList: true, 
+		characterData: true, 
+		subtree: true
+	};
+	if(MutationObserver){
+		var observer = new MutationObserver(function(mutations) {
+			var doForce = false
+			if(disableMutations) return
+		
+			mutations.forEach(function(mutation) {
+				if(mutation.type === 'childList' && 
+					(
+						mutation.target.childNodes.length > 1 || 
+						mutation.addedNodes.length > 1 || 
+						mutation.addedNodes.length === 0 || 
+						mutation.addedNodes[0].nodeType !== 3)){
+					/*for(var i=0;i<mutation.target.childNodes.length;++i){
+						var cn = mutation.target.childNodes[i]
+						if(cn.nodeType !== 3){
+							doForce = true
+						}
+					}*/
+				
+					if(mutation.addedNodes.length === 0 && mutation.removedNodes.length === 1 && mutation.removedNodes[0].nodeType === 3){
+					}else if(mutation.addedNodes.length === 1 && mutation.addedNodes[0].localName === 'br' && mutation.removedNodes.length === 0){
+					}else{
+						console.log('mutation ' + mutation.type)/* + ' ' + 
+							mutation.target.childNodes.length + ' ' + 
+							mutation.addedNodes.length + ' ' + 
+							mutation.addedNodes[0].nodeType)*/
+						doForce = true
+					}
+				}
+				//console.log(mutation.type);
+			});
+			if(doForce){
+				console.log('mutation observer hinting full refresh')
+				w.shouldRefresh = true
+				observer.disconnect()
+				doRefresh()
+			}
+		});
 
+		w._enableObserver = function(){
+			//console.log('begun observing')
+			if(this.observerEnabled){
+				console.log('WARNING: already enabled')
+				return
+			}
+			this.observerEnabled = true
+			observer.observe(containerNode, config);
+		}
+		w._disableObserver = function(){
+			//console.log('disabled observing')
+			if(!this.observerEnabled){
+				console.log('WARNING: already disabled')
+				return
+			}
+			this.observerEnabled = false
+			observer.disconnect()
+		}
+	}else{
+		w._enableObserver = function(){}
+		w._disableObserver = function(){}
+	}
 	
-	
-	
-	
-	//observer.observe(containerNode, config);
+	//setup(w)
+
+	w._refresh()
+}
+
+Whittle.prototype.avoidMutation = function(cb){
+	this._disableObserver()
+	cb()
+	this._enableObserver()
+}
+function attach(setHtml, generatorFunction, setup){
+
+	var w = new Whittle(setHtml, generatorFunction)
 	
 	var f = w._refresh.bind(w)
 	f.avoidMutation = function(cb){
@@ -1295,8 +1578,20 @@ exports.attach = function(containerNode, generatorFunction){
 		cb()
 		w._enableObserver()
 	}
+	
+	setup(w)
+
 	return f
 }
+
+function attachExternal(dom, generatorFunction){
+	function setHtml(h){
+		dom.innerHTML = h
+	}
+	return attach(setHtml, generatorFunction, defaultSetupMutationObserver.bind(undefined, dom))
+}
+
+exports.attach = attachExternal
 
 exports.makeHtmlString = function(generatorFunction){
 	var w = new Whittle(undefined, generatorFunction)
