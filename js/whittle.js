@@ -236,6 +236,7 @@ function render(w, r){
 			}else if(r.type === 'option'){
 				html += (r.selected?' selected':'')
 			}else if(r.type === 'textarea'){
+				html += (r.name?' name="'+esc(r.name)+'"':'')
 				html += r.rows!==undefined?' rows="'+r.rows+'"':''
 				html += r.cols!==undefined?' cols="'+r.cols+'"':''
 			}
@@ -271,16 +272,80 @@ var EventSequenceMap = {
 	'click': ['mousedown', 'click', 'mouseup']
 }
 
+function isTypeable(obj){
+	if(obj.type === 'input' && obj.typeAttribute === 'text'){
+		return true
+	}else if(obj.type === 'textarea'){
+		return true
+	}else if(obj.contenteditable){
+		return true
+	}
+	//console.log('tODO ' + obj.type)
+	return false
+}
+function simulateTyping(str, obj, force){
+	if(obj.contenteditable || force){
+		if(obj.children && obj.children.length === 1){
+			var c = obj.children[0]
+			simulateTyping(str, c, true)
+		}else if((!obj.children || obj.children.length === 0) && obj.type === 'text'){
+			//console.log('simulating text change: ' + obj.type)
+			
+			function targetMaker(obj){
+				return {
+					textContent: getTextContent(obj)
+				}
+			}
+			
+			simulateEvent('keydown', obj, targetMaker)
+			obj.text += str
+			//target.textContent = getTextContent(obj)
+			simulateEvent('keypress', obj, targetMaker)
+			simulateEvent('keyup', obj, targetMaker)
+		}else{
+			throw new Error('tODO ' + obj.type)
+		}
+	}else{
+		throw new Error('tODO ' + obj.type)
+	}
+}
+
 if(page.server){
 	//console.log('in whittle')
 	//var indexByClazz = {}
 
+	function typeAny(str){
+		var count = 0
+		function countTypeable(obj){
+			if(isTypeable(obj)) ++count
+		}
+		for(var i=0;i<whittles.length;++i){
+			var w = whittles[i]
+			walkAll(w.rootGenerator, countTypeable)
+		}
+
+		var index = Math.floor(Math.random()*(count-1))
+
+		var count = 0
+		function checkTypeable(obj){
+			if(isTypeable(obj)){
+				if(count === index){
+					simulateTyping(str, obj)
+				}
+				++count
+			}
+		}
+		for(var i=0;i<whittles.length;++i){
+			var w = whittles[i]
+			if(count > index) break
+			walkAll(w.rootGenerator, checkTypeable)
+		}
+	}
 	function eventAny(eventName){
 		var count = 0
 		function countEventable(obj){
 			if(isEventable(eventName, obj)) ++count
 		}
-		//whittles.forEach(function(w){
 		for(var i=0;i<whittles.length;++i){
 			var w = whittles[i]
 			walkAll(w.rootGenerator, countEventable)
@@ -288,22 +353,15 @@ if(page.server){
 
 		var events = EventSequenceMap[eventName] || [eventName]
 		
-		//console.log(eventName+'able count: ' + count)
-		
 		var index = Math.floor(Math.random()*(count-1))
-		
-		//console.log('going to click: ' + index)
 
 		var count = 0
 		function checkEventable(obj){
 			if(isEventable(eventName, obj)){
 				if(count === index){
-					//console.log(eventName+'ing any: ' + index + ' ' + obj.type + ' ' + JSON.stringify(obj.classes))
-					//simulateEvent(eventName/*'click'*/, obj)
-					//events.forEach(function(ev){
 					for(var j=0;j<events.length;++j){
 						var ev = events[j]
-						simulateEvent(ev, obj)
+						simulateEvent(ev, obj, stubMaker)
 					}
 				}
 				++count
@@ -316,6 +374,7 @@ if(page.server){
 		}
 	}
 	page.server.clickAny = eventAny.bind(undefined, 'click')
+	page.server.typeAny = typeAny
 	page.server.eventAny = eventAny
 	
 	page.server.click = function(selector){
@@ -327,7 +386,7 @@ if(page.server){
 				throw new Error('too many options: ' + arr.length + ' for ' + selector)
 			}else if(arr.length === 1){
 				did = true
-				simulateEvent('click', arr[0])
+				simulateEvent('click', arr[0], stubMaker)
 			}
 		})
 		//console.log('whittles: ' + whittles.length)
@@ -337,21 +396,41 @@ if(page.server){
 	console.log('in whittle not server')
 }
 
-function simulateEvent(eventName, target){
+function stubMaker(){return {}}
+
+function simulateEvent(eventName, obj, targetMaker){
+	if(arguments.length !== 3) throw new Error('wrong number of arguments: ' + arguments.length)
+	if(typeof(targetMaker) !== 'function') throw new Error('targetMaker not function')
 	//throw new Error('TODO: ' + eventName)
 	
 	page.fireGlobalEvent(eventName)
+	simulateEventOnObjectAndParents(eventName, obj, targetMaker)
+}
+
+function simulateEventOnObjectAndParents(eventName, obj, targetMaker){
+	var stopped = simulateEventOnObject(eventName, obj, targetMaker)
+	if(!stopped && obj.parent){
+		simulateEventOnObjectAndParents(eventName, obj.parent, targetMaker)
+	}
+}
+
+function simulateEventOnObject(eventName, obj, targetMaker){
 	
-	if(target.listeners){
+	var stopped = false
 	
-		for(var i=0;i<target.listeners.length;++i){
-			var list = target.listeners[i]
+	if(obj.listeners){
+	
+		var target = targetMaker(obj)
+		
+		for(var i=0;i<obj.listeners.length;++i){
+			var list = obj.listeners[i]
 			//console.log(list.type + ' ')
 			if(list.type === eventName){
 				var e = {
 					preventDefault: function(){
 					},
 					stopPropagation: function(){
+						stopped = true
 					}
 				}
 				//console.log('simulating event: ' + eventName)
@@ -359,6 +438,7 @@ function simulateEvent(eventName, target){
 			}
 		}
 	}
+	return stopped
 }
 
 function Whittle(setHtml, generatorFunc){
@@ -393,6 +473,20 @@ function walkAll(cur, cb){
 			cb(c)
 			walkAll(c, cb)
 		}
+	}
+}
+
+function getTextContent(obj){
+	if(obj.type === 'text') return obj.text
+	else if(obj.children){
+		var text = ''
+		for(var i=0;i<obj.children.length;++i){
+			var c = obj.children[i]
+			text += getTextContent(c)
+		}
+		return text
+	}else{
+		return ''
 	}
 }
 
@@ -488,7 +582,9 @@ function detachListeners(local, g){
 				throw new Error('doms do not match')
 			}
 			r.removed = true*/
-			dom.removeEventListener(r.type, r.func)
+			if(dom){
+				dom.removeEventListener(r.type, r.func)
+			}
 			//dom[r.uid] = undefined
 			r.func = undefined
 		}
@@ -625,7 +721,7 @@ Whittle.prototype._refresh = function(forceRefresh){
 	}
 	
 	if(!did){
-		console.log('full re-render: ' + (!forceRefresh) + ' ' + (!this.shouldRefresh))
+		//console.log('full re-render: ' + (!forceRefresh) + ' ' + (!this.shouldRefresh))
 		var html = render(this, g)
 		g.setHtml(html)
 	}
@@ -981,7 +1077,7 @@ function different(a, b){
 }
 
 function makeNode(type,local){
-	var n = {type: type, /*classes: [], listeners: [], children: [], */parent: local.cur, /*style: [],*/ uid: 'wuid_'+local._makeUid()/*, listened: false*/}
+	var n = {type: type, parent: local.cur, uid: 'wuid_'+local._makeUid()}
 	if(!local.cur.children) local.cur.children = []
 	local.cur.children.push(n)
 	local.cur = n
@@ -1487,7 +1583,7 @@ function defaultSetupMutationObserver(containerNode, w){
 	
 	function doRefresh(){
 		setTimeout(function(){
-			if(w.shouldRefresh){
+			if(w.shouldRefresh && !disableMutations){
 				console.log('mutation observer causing full refresh')
 				w._refresh(true)
 			}
