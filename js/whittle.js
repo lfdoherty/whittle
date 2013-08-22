@@ -90,7 +90,7 @@ function replaceHtmlEntitiesCb(match, entity, str) {
 	return translate[c];
 }
 function replaceHtmlEntities(s){
-	return s.replace(translate_re, replaceHtmlEntitiesCb);
+	return (s+'').replace(translate_re, replaceHtmlEntitiesCb);
 }
 
 function esc(s){//TODO angle brackets?
@@ -960,10 +960,12 @@ function copyOverListeners(b, a){
 		var ac = a.children[index]
 		copyOverListeners(bc, ac)
 	})*/
-	for(var i=0;i<b.children.length;++i){
-		var bc = b.children[i]
-		var ac = a.children[i]
-		copyOverListeners(bc, ac)		
+	if(b.children){
+		for(var i=0;i<b.children.length;++i){
+			var bc = b.children[i]
+			var ac = a.children[i]
+			copyOverListeners(bc, ac)		
+		}
 	}
 }
 
@@ -1064,7 +1066,10 @@ function different(a, b){
 			}
 		}
 	}
-	if(a.children.length !== b.children.length) return 'children'
+
+	if(!a.children && !b.children) return
+	
+	if((a.children && !b.children) || (!a.children && b.children) || a.children.length !== b.children.length) return 'children'
 	/*console.log('comparing children: ' + a.children.length)
 	for(var i=0;i<a.children.length;++i){
 		console.log(a.children[i].uid + ' -> ' + b.children[i].uid)
