@@ -863,6 +863,9 @@ function renderAttrs(a, b){
 			return
 		}
 		
+		if(!b.children){
+			return
+		}
 		if(b.children.length > 0){
 			if(b.children.length === 1 && a.children.length === 1){// && a.children[0].type === 'text' && b.children[0].type === 'text'){
 				//b.children[0].uid = a.children[0].uid
