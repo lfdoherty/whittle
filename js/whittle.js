@@ -110,6 +110,7 @@ function renderStyle(w, r){
 function stringifyStyle(r){
 	var str = ''
 	var many = 0
+	if(!r.style) return str
 	r.style.forEach(function(s){
 		Object.keys(s).forEach(function(key){
 			var v = s[key]
@@ -576,7 +577,7 @@ function detachListeners(local, g){
 				console.log('ERROR/WARNING: r.func undefined (listener already detached?) ' + g.type + ' ' + JSON.stringify(g.classes))
 				return
 			}
-			//if(r.func.uid) console.log('removed(' + r.type + '): ' + r.func.uid)
+			//console.log('removed(' + r.type + '): ' + g.type)
 			var dom = document.getElementById(g.uid)
 			/*if(dom !== r.dom){
 				throw new Error('doms do not match')
@@ -620,7 +621,7 @@ function attachListeners(local, g, useListened){
 		g.listened = true
 		var dom = document.getElementById(g.uid)
 		if(dom == undefined){
-			throw new Error('*cannot find dom node: ' + g.uid + ' to attach listeners to: ' + g.listeners[0].type)
+			throw new Error('*cannot find dom node: ' + g.uid + ' to attach listeners to: ' + g.listeners[0].type + ' ' + g.type)
 
 		}
 		g.listeners.forEach(function(r){
@@ -721,7 +722,7 @@ Whittle.prototype._refresh = function(forceRefresh){
 	}
 	
 	if(!did){
-		//console.log('full re-render: ' + (!forceRefresh) + ' ' + (!this.shouldRefresh))
+		console.log('full re-render: ' + (!forceRefresh) + ' ' + (!this.shouldRefresh))
 		var html = render(this, g)
 		g.setHtml(html)
 	}
@@ -742,7 +743,7 @@ Whittle.prototype._refresh = function(forceRefresh){
 		}
 	}catch(e){
 		if(did){
-			console.log('ERROR after partial refresh: ' + e.stack)
+			console.log('ERROR after partial refresh: ' + e.message + '\n'+e.stack)
 			this._isRefreshing = false
 			this._refresh(true)
 			this._enableObserver()
@@ -762,16 +763,20 @@ Whittle.prototype._refresh = function(forceRefresh){
 Whittle.prototype.refresh = Whittle.prototype._refresh
 
 function adjustClasses(a, b, dom){
-	b.classes.forEach(function(c){
-		if(a.classes.indexOf(c) === -1){
-			dom.classList.add(c)
-		}
-	})
-	a.classes.forEach(function(c){
-		if(b.classes.indexOf(c) === -1){
-			dom.classList.remove(c)
-		}
-	})
+	if(b.classes){
+		b.classes.forEach(function(c){
+			if(a.classes.indexOf(c) === -1){
+				dom.classList.add(c)
+			}
+		})
+	}
+	if(a.classes){
+		a.classes.forEach(function(c){
+			if(!b.classes || b.classes.indexOf(c) === -1){
+				dom.classList.remove(c)
+			}
+		})
+	}
 }
 
 function caretPositionIn(div){
@@ -788,7 +793,7 @@ function caretPositionIn(div){
 }
 
 function renderAttrs(a, b){
-	if(a.type === 'input'){
+	if(a.type === 'input' || a.type === 'button'){
 		var dom = document.getElementById(a.uid)
 		if(!dom){
 			//console.log('dom not found: ' + a.uid)
@@ -818,7 +823,7 @@ function renderAttrs(a, b){
 	}else if(a.type === 'a' && a.children.length === 0){
 		var dom = document.getElementById(a.uid)
 		if(!dom){
-			//console.log('dom not found: ' + a.uid)
+			console.log('dom not found: ' + a.uid)
 			return
 		}
 		
@@ -839,7 +844,7 @@ function renderAttrs(a, b){
 		b.uid = a.uid
 		//console.log('updated a')
 		return true
-	}else if(a.type === 'span' || a.type === 'div'){
+	}else if(a.type === 'span' || a.type === 'div' || a.type === 'select' || a.type === 'option' || a.type === 'textarea'){
 		var dom = document.getElementById(a.uid)
 		if(!dom){
 
@@ -864,6 +869,7 @@ function renderAttrs(a, b){
 		}
 		
 		if(!b.children){
+			//console.log('b failed')
 			return
 		}
 		if(b.children.length > 0){
@@ -873,10 +879,22 @@ function renderAttrs(a, b){
 				var res = renderAttrs(a.children[0], b.children[0])
 				//b.children[0] = a.children[0]
 				if(!res){
+					//console.log('child render failed')
 					return
 				}
+			}else if(b.children.length === a.children.length){
+				for(var i=0;i<b.children.length;++i){
+					var c = b.children[i]
+					var oc = a.children[i]
+					var res = renderAttrs(oc, c)
+					if(!res){
+						console.log('failed due to children pair')
+						return
+					}
+				}
+				//return true
 			}else{
-				console.log('failed due to span children: ' + b.children.length + ' ' + a.children.length)
+				//console.log('failed due to span children: ' + b.children.length + ' ' + a.children.length)
 				return	
 			}
 		}
@@ -901,6 +919,7 @@ function renderAttrs(a, b){
 		return true
 	}else if(a.type === 'text'){
 		if(a.parent.children.length > 1){
+			console.log('too many children')
 			return
 		}
 		
@@ -931,7 +950,7 @@ function renderAttrs(a, b){
 					}
 				}
 			}else{
-				console.log('text same ' + b.text + ' ' + a.text)
+				//console.log('text same ' + b.text + ' ' + a.text)
 			}
 		}
 		b.uid = a.uid
@@ -984,7 +1003,7 @@ function renderPartialChildren(ach, bch){
 			//console.log('no change')
 		}else if(d === 'children'){
 			if(ac.children.length !== bc.children.length){
-				//console.log('children length different ' + ac.children.length + ' !== ' + bc.children.length)
+				console.log('children length different ' + ac.children.length + ' !== ' + bc.children.length)
 				return
 			}
 			var did = renderPartialChildren(ac.children, bc.children)
@@ -998,7 +1017,7 @@ function renderPartialChildren(ach, bch){
 			var did = renderAttrs(ac, bc)
 			
 			if(!did) {
-				//console.log('attrs');
+				console.log('attrs');
 				return;
 			}
 		}else{
