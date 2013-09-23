@@ -147,6 +147,25 @@ function render(w, r){
 			html += renderChildren(w,r)
 			html += '</'+r.type+'>'
 		break;
+		case 'video':
+			html += '<'+r.type+renderClasses(r)
+					+(r.controls?' controls ':'')
+					+(r.preload?' preload="'+esc(r.preload)+'"':'')
+					+(r.width?' width="'+esc(r.width)+'"':'')
+					+(r.height?' height="'+esc(r.height)+'"':'')
+					+idifyIfNeeded(w, r)
+					+renderStyle(w,r)+'>'
+			html += renderChildren(w,r)
+			html += '</'+r.type+'>'
+		break;
+		case 'source':
+			html += '<'+r.type+renderClasses(r)
+					+(r.src?' src="'+esc(r.src)+'"':'')
+					+(r.typeAttribute?' type="'+esc(r.typeAttribute)+'"':'')
+					+idifyIfNeeded(w, r)+'>'
+			html += renderChildren(w,r)
+			html += '</'+r.type+'>'
+		break;
 		case 'innerHTML':
 			html += r.innerHTML//TODO inject after via innerHTML= method to ensure containment?
 		break;
@@ -722,7 +741,7 @@ Whittle.prototype._refresh = function(forceRefresh){
 	}
 	
 	if(!did){
-		console.log('full re-render: ' + (!forceRefresh) + ' ' + (!this.shouldRefresh))
+		//console.log('full re-render: ' + (!forceRefresh) + ' ' + (!this.shouldRefresh))
 		var html = render(this, g)
 		g.setHtml(html)
 	}
@@ -1254,6 +1273,36 @@ Whittle.prototype.iframe = function(){
 	return makeNode('iframe', this)
 }
 
+Whittle.prototype.video = function(){
+	return makeNode('video', this)
+}
+Whittle.prototype.source = function(){
+	if(this.cur.type !== 'video'){
+		_.errout('source tag must be child of video tag')
+	}
+	return makeNode('source', this)
+}
+Whittle.prototype.controls = function(){
+	this.cur.controls = true
+	return this
+}
+Whittle.prototype.preload = function(v){
+	this.cur.preload = v
+	return this
+}
+Whittle.prototype.width = function(v){
+	this.cur.width = v
+	return this
+}
+Whittle.prototype.height = function(v){
+	this.cur.height = v
+	return this
+}
+Whittle.prototype.src = function(v){
+	this.cur.src = v
+	return this
+}
+
 Whittle.prototype.select = function(){
 	return makeNode('select', this)
 }
@@ -1384,8 +1433,8 @@ Whittle.prototype.enctype = function(v){
 }
 
 Whittle.prototype.type = function(v){
-	if(this.cur.type !== 'input'){
-		throw new Error('only INPUT tags can have a type attribute')
+	if(this.cur.type !== 'input' && this.cur.type !== 'source'){
+		throw new Error('only INPUT and SOURCE tags can have a type attribute')
 	}
 	//TODO validate
 	this.cur.typeAttribute = v
