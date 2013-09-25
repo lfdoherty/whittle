@@ -153,6 +153,7 @@ function render(w, r){
 					+(r.preload?' preload="'+esc(r.preload)+'"':'')
 					+(r.width?' width="'+esc(r.width)+'"':'')
 					+(r.height?' height="'+esc(r.height)+'"':'')
+					+(r.title?' title="'+esc(r.title)+'"':'')
 					+idifyIfNeeded(w, r)
 					+renderStyle(w,r)+'>'
 			html += renderChildren(w,r)
