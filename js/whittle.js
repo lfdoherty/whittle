@@ -49,9 +49,10 @@ global.doWhittleAction = function(actionString){
 function renderChildren(w, r){
 	var html = ''
 	if(r.children){
-		r.children.forEach(function(c){
+		for(var i=0;i<r.children.length;++i){
+			var c = r.children[i]
 			html += render(w, c)
-		})
+		}
 	}
 	return html
 }
@@ -198,7 +199,7 @@ function render(w, r){
 		case 'table':
 		case 'tbody':
 		case 'tr':
-		case 'label':
+		//case 'label':
 		case 'select':
 		case 'td':
 			html += '<'+r.type+renderClasses(r)
@@ -261,6 +262,14 @@ function render(w, r){
 				html += r.rows!==undefined?' rows="'+r.rows+'"':''
 				html += r.cols!==undefined?' cols="'+r.cols+'"':''
 			}
+			html += '>'
+			html += renderChildren(w,r)
+			html += '</'+r.type+'>'
+		break;
+		case 'label':
+			html += '<'+r.type+renderClasses(r)+idifyIfNeeded(w, r)
+					+(r.for!==undefined?' for="'+esc(r.for)+'"':'')
+					+renderStyle(w,r)
 			html += '>'
 			html += renderChildren(w,r)
 			html += '</'+r.type+'>'
@@ -893,7 +902,7 @@ function renderAttrs(a, b){
 			return
 		}
 		if(b.children.length > 0){
-			if(b.children.length === 1 && a.children.length === 1){// && a.children[0].type === 'text' && b.children[0].type === 'text'){
+			if(a.children && b.children.length === 1 && a.children.length === 1){// && a.children[0].type === 'text' && b.children[0].type === 'text'){
 				//b.children[0].uid = a.children[0].uid
 				//b.children[0].text = a.children
 				var res = renderAttrs(a.children[0], b.children[0])
@@ -902,7 +911,7 @@ function renderAttrs(a, b){
 					//console.log('child render failed')
 					return
 				}
-			}else if(b.children.length === a.children.length){
+			}else if(a.children && b.children.length === a.children.length){
 				for(var i=0;i<b.children.length;++i){
 					var c = b.children[i]
 					var oc = a.children[i]
@@ -957,6 +966,7 @@ function renderAttrs(a, b){
 				dom.textContent = b.text||''
 				//console.log('*dom text: ' + b.text.length)
 				//console.log(new Error().stack)
+
 				if(pos !== undefined){
 					var range = document.createRange()
 					try{
@@ -965,6 +975,7 @@ function renderAttrs(a, b){
 						var selection = window.getSelection();
 						selection.removeAllRanges();
 						selection.addRange(range)
+						console.log('replaced selection ' + pos)
 					}catch(e){
 						console.log('WARNING: whittle failed to restore selection at pos ' + pos)
 					}
@@ -1037,7 +1048,7 @@ function renderPartialChildren(ach, bch){
 			var did = renderAttrs(ac, bc)
 			
 			if(!did) {
-				console.log('attrs');
+				//console.log('attrs');
 				return;
 			}
 		}else{
@@ -1446,6 +1457,11 @@ Whittle.prototype.name = function(v){
 	this.cur.name = v
 	return this
 }
+Whittle.prototype.for = function(v){
+	if(this.cur.type !== 'label') throw new Error('only LABEL tags can have a for attribute')
+	this.cur.for = v
+	return this
+}
 
 Whittle.prototype.min = function(v){
 	if(this.cur.type !== 'input'){
@@ -1615,6 +1631,8 @@ Whittle.prototype.listen = function(eventName, cb){
 exports.page = function(generatorFunction){
 	//console.log(JSON.stringify(page))
 	console.log('in page')
+
+	var hasLoaded = false
 
 	function setHtml(html){
 		if(!hasLoaded) return
