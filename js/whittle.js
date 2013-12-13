@@ -709,7 +709,12 @@ function afterAll(local, g){
 		})
 	}
 	if(g.children){
-		g.children.forEach(afterAll.bind(undefined, local))
+		//g.children.forEach(function(){
+		for(var i=0;i<g.children.length;++i){
+			var ng = g.children[i]
+			afterAll(local, ng)
+		}
+		//})//afterAll.bind(undefined, local))
 	}
 }
 Whittle.prototype._refresh = function(forceRefresh){
