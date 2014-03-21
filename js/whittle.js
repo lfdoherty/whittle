@@ -1587,6 +1587,16 @@ Whittle.prototype.dragstart = function(cb){
 	this.cur.listeners.push({type: 'dragstart', f: cb})
 	return this
 }
+Whittle.prototype.dragover = function(cb){
+	if(!this.cur.listeners) this.cur.listeners = []
+	this.cur.listeners.push({type: 'dragover', f: cb})
+	return this
+}
+Whittle.prototype.dragend = function(cb){
+	if(!this.cur.listeners) this.cur.listeners = []
+	this.cur.listeners.push({type: 'dragend', f: cb})
+	return this
+}
 Whittle.prototype.drop = function(cb){
 	if(!this.cur.listeners) this.cur.listeners = []
 	this.cur.listeners.push({type: 'drop', f: cb})
