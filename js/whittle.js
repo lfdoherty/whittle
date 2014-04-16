@@ -720,7 +720,9 @@ function afterAll(local, g){
 Whittle.prototype._refresh = function(forceRefresh){
 
 	if(this._isRefreshing){
-		throw new Error('recursive refresh problem')
+		var err = new Error('recursive refresh problem')
+		console.log('ERROR: recursive refresh problem: ' + err.stack)
+		throw err
 	}
 	this._isRefreshing = true
 		
